@@ -1,0 +1,84 @@
+# 工作流配置，可以定义多个不同的构建流程
+workflows:
+    # 这是给 iOS 平台定义的一个工作流
+    ios-release-workflow:
+        name: iOS Build for App Store Connect
+        # 选择构建环境，mac_mini_m2 对于大多数项目性价比很高
+        instance_type: mac_mini_m2
+        # 最大构建时间（分钟）
+        max_build_duration: 60
+
+        environment:
+            # 这里导入我们在 Codemagic 后台要设置的敏感信息组
+            groups:
+                - ios_credentials # 专门用来存放 iOS 证书和 API 密钥的组
+            node: latest
+            xcode: latest
+
+        # 定义构建过程中要执行的脚本
+        scripts:
+            # 1. 安装 Node.js 依赖
+            - name: Install npm dependencies
+              script: |
+                  npm ci
+
+            # 2. 构建前端代码（生成 dist 文件夹）
+            - name: Build web assets
+              script: |
+                  npm run build
+
+            # 3. 同步 Capacitor iOS 项目（确保 Xcode 项目是最新的）
+            - name: Sync Capacitor iOS project
+              script: |
+                  npx cap sync ios
+
+            # 4. 获取 iOS 签名文件（自动从 App Store Connect 下载证书和描述文件）
+            - name: Fetch iOS signing files
+              script: |
+                  # 环境变量 APP_STORE_APPLE_ID 我们稍后添加到 Codemagic 后台
+                  app-store-connect fetch-signing-files "com.lingumate.app" --type IOS_APP_STORE --create
+
+            # 5. 将证书添加到 macOS 钥匙串
+            - name: Add certificates to keychain
+              script: |
+                  keychain add-certificates
+
+            # 6. 设置 Xcode 项目的代码签名
+            - name: Set up code signing settings
+              script: |
+                  xcode-project use-profiles
+
+            # 7. 增加构建版本号（可选）
+            - name: Increment build number
+              script: |
+                  cd ios/App
+                  agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956")+ 1))
+
+            # 8. 使用 xcodebuild 构建 .ipa 文件
+            - name: Build ipa
+              script: |
+                  xcode-project build-ipa \
+                    --workspace "ios/App/App.xcworkspace" \
+                    --scheme "App"
+
+        # 指定 Codemagic 在构建完成后需要提取的文件
+        artifacts:
+            - build/ios/ipa/*.ipa
+            - /tmp/xcodebuild_logs/*.log
+
+        # 配置构建产物的发布选项
+        publishing:
+            # 自动将 .ipa 上传到 App Store Connect，用于 TestFlight 内测
+            app_store_connect:
+                api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+                key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+                issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+                # 如果只想上传到 TestFlight，不提交审核，可以设置为 'manual'
+                submit_to_testflight: true
+            # 当构建失败时，发送邮件通知
+            email:
+                recipients:
+                    - junma0614@gmail.com
+                notify:
+                    success: true
+                    failure: true
