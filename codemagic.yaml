@@ -30,7 +30,16 @@ workflows:
             # 3. 同步 Capacitor iOS 项目（确保 Xcode 项目是最新的）
             - name: Sync Capacitor iOS project
               script: |
+                  # 正常同步 Capacitor
                   npx cap sync ios
+                  
+                  # 强制删除 Podfile 和 Podfile.lock（如果存在），防止 Cordova 插件尝试运行 pod install
+                  rm -f ios/App/Podfile
+                  rm -f ios/App/Podfile.lock
+                  
+                  # 手动解析 SPM 依赖，确保依赖完整
+                  cd ios/App
+                  xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App
 
             # 4. 获取 iOS 签名文件（自动从 App Store Connect 下载证书和描述文件）
             - name: Fetch iOS signing files
@@ -52,7 +61,7 @@ workflows:
             - name: Increment build number
               script: |
                   cd ios/App
-                  agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956")+ 1))
+                  agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956") + 1))
 
             # 8. 使用 xcodebuild 构建 .ipa 文件
             - name: Build ipa
