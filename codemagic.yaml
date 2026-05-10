@@ -27,10 +27,10 @@ workflows:
               script: |
                   npm run build
 
-            # 3. 重新生成 iOS 项目（确保 SPM 依赖正确）
+            # 3. 重新生成 iOS 项目
             - name: Regenerate iOS project
               script: |
-                  # 删除现有的 ios 文件夹（避免遗留错误的包引用）
+                  # 删除现有的 ios 文件夹
                   rm -rf ios
                   
                   # 重新添加 iOS 平台
@@ -39,11 +39,11 @@ workflows:
                   # 同步项目
                   npx cap sync ios
                   
-                  # 删除可能残留的 Podfile，防止干扰
+                  # 删除可能残留的 Podfile
                   rm -f ios/App/Podfile || true
                   rm -f ios/App/Podfile.lock || true
 
-            # 4. 获取 iOS 签名文件（自动从 App Store Connect 下载证书和描述文件）
+            # 4. 获取 iOS 签名文件
             - name: Fetch iOS signing files
               script: |
                   app-store-connect fetch-signing-files "com.lingumate.app" --type IOS_APP_STORE --create
@@ -64,28 +64,49 @@ workflows:
                   cd ios/App
                   agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956") + 1))
 
-            # 8. 使用 xcodebuild 构建 .ipa 文件
+            # 8. 手动构建 .ipa 文件（使用原始 xcodebuild 命令）
             - name: Build ipa
               script: |
-                  xcode-project build-ipa \
-                    --project "ios/App/App.xcodeproj" \
-                    --scheme "App"
+                  # 设置项目路径
+                  PROJECT_PATH="ios/App/App.xcodeproj"
+                  SCHEME="App"
+                  ARCHIVE_PATH="build/App.xcarchive"
+                  EXPORT_PATH="build"
+                  
+                  # 清理之前的构建
+                  xcodebuild clean \
+                    -project "$PROJECT_PATH" \
+                    -scheme "$SCHEME" \
+                    -allowProvisioningUpdates
+                  
+                  # 归档（Archive）
+                  xcodebuild archive \
+                    -project "$PROJECT_PATH" \
+                    -scheme "$SCHEME" \
+                    -archivePath "$ARCHIVE_PATH" \
+                    -allowProvisioningUpdates
+                  
+                  # 从归档导出 IPA
+                  xcodebuild -exportArchive \
+                    -archivePath "$ARCHIVE_PATH" \
+                    -exportPath "$EXPORT_PATH" \
+                    -exportOptionsPlist <(echo '{"method": "app-store", "teamID": "$TEAM_ID"}') \
+                    -allowProvisioningUpdates
 
         # 指定 Codemagic 在构建完成后需要提取的文件
         artifacts:
-            - build/ios/ipa/*.ipa
+            - build/*.ipa
+            - build/*.xcarchive
             - /tmp/xcodebuild_logs/*.log
 
         # 配置构建产物的发布选项
         publishing:
-            # 自动将 .ipa 上传到 App Store Connect，用于 TestFlight 内测
+            # 自动将 .ipa 上传到 App Store Connect
             app_store_connect:
                 api_key: $APP_STORE_CONNECT_PRIVATE_KEY
                 key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
                 issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-                # 如果只想上传到 TestFlight，不提交审核，可以设置为 'manual'
                 submit_to_testflight: true
-            # 当构建失败时，发送邮件通知
             email:
                 recipients:
                     - junma0614@gmail.com
