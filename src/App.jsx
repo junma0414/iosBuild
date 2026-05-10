@@ -18,8 +18,7 @@ import QATraining from './pages/QATraining';
 //import Membership from './pages/Membership';
 import Checkout from './pages/Checkout';
 import Login from './pages/Login';
-import TestRevenueCat from './pages/TestRevenueCat';
-import TestGoogleOAuth from './pages/TestGoogleOAuth';
+
 import GoogleCallback from './pages/GoogleCallback';
 import AppleCallback from './pages/AppleCallback';
 
@@ -66,8 +65,6 @@ const PublicRoutes = () => {
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify-email" element={<VerifyEmail />} />
-        <Route path="/test-revenuecat" element={<TestRevenueCat />} />
-        <Route path="/test-google-oauth" element={<TestGoogleOAuth />} />
         <Route path="/auth/google/callback" element={<GoogleCallback />} />
         <Route path="/auth/apple/callback" element={<AppleCallback />} />
         <Route path="*" element={<Login />} />
