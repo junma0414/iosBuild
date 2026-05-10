@@ -8,7 +8,7 @@ import { Chrome, Apple, Mail } from 'lucide-react';
 import { isNativeApp, isIOS, isAndroid } from '../lib/planUtils';
 import { base44 } from '../api/base44Client';
 
-import { GoogleSignIn } from '@capawesome/capacitor-google-sign-in';
+import { GoogleSignIn } from 'capacitor-google-sign-in';
 
 
 
@@ -396,33 +396,19 @@ const Login = () => {
 
   if (isNative) {
     try {
-      // ========== Native: @capawesome/google-sign-in ==========
-      console.log('📱 [handleGoogleLogin] using capawesome GoogleSignIn');
+      // ========== Native: capacitor-google-sign-in ==========
+      console.log('📱 [handleGoogleLogin] using capacitor-google-sign-in');
 
-      // Initialize first (required once before signIn)
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
         throw new Error('Google Client ID not configured');
       }
-      console.log('📱 [handleGoogleLogin] initializing with clientId:', clientId.substring(0, 20) + '...');
 
-      try {
-        await GoogleSignIn.initialize({
-          clientId,
-          scopes: ['email', 'profile', 'openid'],
-          requestServerAuthCode: true,
-        });
-        console.log('📱 [handleGoogleLogin] initialize succeeded');
-      } catch (initErr) {
-        console.warn('📱 [handleGoogleLogin] initialize failed (may already be initialized):', initErr);
-      }
+      const result = await GoogleSignIn.handleSignInButton();
+      console.log('📱 [handleGoogleLogin] signIn result:', result);
 
-      const result = await GoogleSignIn.signIn();
-      console.log('📱 [handleGoogleLogin] signIn result keys:', Object.keys(result));
-
-      // 优先用 idToken，Android 回退到 serverAuthCode
-      const idToken = result.idToken || null;
-      const serverAuthCode = result.serverAuthCode || null;
+      const idToken = result?.response?.identityToken || null;
+      const serverAuthCode = result?.response?.serverAuthCode || null;
 
       if (idToken) {
         console.log('📱 [handleGoogleLogin] using idToken');
