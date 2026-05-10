@@ -30,16 +30,15 @@ workflows:
             # 3. 同步 Capacitor iOS 项目（确保 Xcode 项目是最新的）
             - name: Sync Capacitor iOS project
               script: |
-                  # 正常同步 Capacitor
+                  # 正常同步 Capacitor（这会生成/更新 iOS 项目）
                   npx cap sync ios
                   
-                  # 强制删除 Podfile 和 Podfile.lock（如果存在），防止 Cordova 插件尝试运行 pod install
-                  rm -f ios/App/Podfile
-                  rm -f ios/App/Podfile.lock
+                  # 如果 pod install 失败是因为没有 Podfile，这是正常的，忽略错误
+                  # 删除可能残留的 Podfile，防止后续步骤干扰
+                  rm -f ios/App/Podfile || true
+                  rm -f ios/App/Podfile.lock || true
                   
-                  # 手动解析 SPM 依赖，确保依赖完整
-                  cd ios/App
-                  xcodebuild -resolvePackageDependencies -project App.xcodeproj -scheme App
+                  # 不手动解析 SPM 依赖，让 Xcode 在构建时自动解析
 
             # 4. 获取 iOS 签名文件（自动从 App Store Connect 下载证书和描述文件）
             - name: Fetch iOS signing files
@@ -66,8 +65,9 @@ workflows:
             # 8. 使用 xcodebuild 构建 .ipa 文件
             - name: Build ipa
               script: |
+                  # 使用 xcode-project build-ipa，它会自动处理依赖解析
                   xcode-project build-ipa \
-                    --workspace "ios/App/App.xcworkspace" \
+                    --project "ios/App/App.xcodeproj" \
                     --scheme "App"
 
         # 指定 Codemagic 在构建完成后需要提取的文件
