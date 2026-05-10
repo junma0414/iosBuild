@@ -27,50 +27,44 @@ workflows:
               script: |
                   npm run build
 
-            # 3. 同步 Capacitor iOS 项目（确保 Xcode 项目是最新的）
-            - name: Sync Capacitor iOS project
+            # 3. 重新生成 iOS 项目（确保 SPM 依赖正确）
+            - name: Regenerate iOS project
               script: |
-                  # 正常同步 Capacitor（这会生成/更新 iOS 项目）
+                  # 删除现有的 ios 文件夹（避免遗留错误的包引用）
+                  rm -rf ios
+                  
+                  # 重新添加 iOS 平台
+                  npx cap add ios
+                  
+                  # 同步项目
                   npx cap sync ios
                   
                   # 删除可能残留的 Podfile，防止干扰
                   rm -f ios/App/Podfile || true
                   rm -f ios/App/Podfile.lock || true
 
-            # 4. 调试：检查 Xcode 和项目结构
-            - name: Debug - Check Xcode and project
-              script: |
-                  echo "=== Xcode version ==="
-                  xcodebuild -version
-                  
-                  echo "=== ios/App/ directory contents ==="
-                  ls -la ios/App/
-                  
-                  echo "=== Available schemes ==="
-                  xcodebuild -project ios/App/App.xcodeproj -list
-
-            # 5. 获取 iOS 签名文件（自动从 App Store Connect 下载证书和描述文件）
+            # 4. 获取 iOS 签名文件（自动从 App Store Connect 下载证书和描述文件）
             - name: Fetch iOS signing files
               script: |
                   app-store-connect fetch-signing-files "com.lingumate.app" --type IOS_APP_STORE --create
 
-            # 6. 将证书添加到 macOS 钥匙串
+            # 5. 将证书添加到 macOS 钥匙串
             - name: Add certificates to keychain
               script: |
                   keychain add-certificates
 
-            # 7. 设置 Xcode 项目的代码签名
+            # 6. 设置 Xcode 项目的代码签名
             - name: Set up code signing settings
               script: |
                   xcode-project use-profiles
 
-            # 8. 增加构建版本号
+            # 7. 增加构建版本号
             - name: Increment build number
               script: |
                   cd ios/App
                   agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956") + 1))
 
-            # 9. 使用 xcodebuild 构建 .ipa 文件
+            # 8. 使用 xcodebuild 构建 .ipa 文件
             - name: Build ipa
               script: |
                   xcode-project build-ipa \
