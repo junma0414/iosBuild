@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "830250163513",
+    "project_id": "lingumate-2ba02",
+    "storage_bucket": "lingumate-2ba02.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:830250163513:android:f1a5318ebeec0b975e9ce8",
+        "android_client_info": {
+          "package_name": "com.lingumate.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAmwK8jWsr3X2ntw5R6lYB1yjPXU_fS30Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/x-icon" href="/favicon.svg" />
+    <title>LinguMate</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    
+    <!-- 🔴 添加 Capacitor 手动注入脚本 -->
+    <script>
+      if (window.location.protocol === 'capacitor:') {
+        window.Capacitor = {
+          isNativePlatform: function() { return true; },
+          getPlatform: function() { 
+            if (/Android/.test(navigator.userAgent)) return 'android';
+            if (/iPhone|iPad/.test(navigator.userAgent)) return 'ios';
+            return 'web';
+          },
+          platform: /Android/.test(navigator.userAgent) ? 'android' : 'ios'
+        };
+        console.log('✅ Capacitor 已手动注入', window.Capacitor);
+      }
+    </script>
+    
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

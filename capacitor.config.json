@@ -1,0 +1,31 @@
+{
+  "appId": "com.lingumate.app",
+  "appName": "LinguMate",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor",
+    "cleartext": false
+  },
+  "plugins": {
+    "Browser": {
+      "packageId": "com.lingumate.app"
+    },
+    "Preferences": {},
+    "Device": {},
+    "App": {
+      "launchUrl": "index.html"
+    }
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scrollEnabled": true,
+    "backgroundColor": "#ffffff",
+    "allowMixedContent": true
+  },
+  "android": {
+    "allowMixedContent": true,
+    "webContentsDebuggingEnabled": true
+  }
+}
