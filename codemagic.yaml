@@ -17,52 +17,28 @@ workflows:
       node: latest
       xcode: latest
 
-      certificates:
-        - certificate: linguamate_distribution_cert
-
-      provisioning_profiles:
-        - profile: linguamate_distribution_provision
-
     scripts:
-      ######################################################################
-      # Install dependencies
-      ######################################################################
       - name: Install npm dependencies
         script: |
           npm ci
 
-      ######################################################################
-      # Build web assets
-      ######################################################################
       - name: Build web assets
         script: |
           npm run build
 
-      ######################################################################
-      # Sync Capacitor
-      ######################################################################
       - name: Sync Capacitor iOS
         script: |
           npx cap sync ios
 
-      ######################################################################
-      # Install CocoaPods
-      ######################################################################
       - name: Install CocoaPods dependencies
         script: |
           cd ios/App
           pod install
 
-      ######################################################################
-      # Show signing identities
-      ######################################################################
       - name: Show signing identities
         script: |
           security find-identity -v -p codesigning || true
 
-      ######################################################################
-      # Archive app
-      ######################################################################
       - name: Archive iOS app
         script: |
           set -e
@@ -74,12 +50,8 @@ workflows:
             -configuration Release \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="AIVANA_codemagic"
+            CODE_SIGN_STYLE=Automatic
 
-      ######################################################################
-      # Create ExportOptions.plist
-      ######################################################################
       - name: Create ExportOptions.plist
         script: |
           cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
@@ -93,24 +65,15 @@ workflows:
               <string>app-store</string>
 
               <key>signingStyle</key>
-              <string>manual</string>
+              <string>automatic</string>
 
               <key>teamID</key>
               <string>${TEAM_ID}</string>
-
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.lingumate.app</key>
-                  <string>AIVANA_codemagic</string>
-              </dict>
 
           </dict>
           </plist>
           EOF
 
-      ######################################################################
-      # Export IPA
-      ######################################################################
       - name: Export IPA
         script: |
           set -e
@@ -121,24 +84,10 @@ workflows:
             -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
             -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist"
 
-      ######################################################################
-      # Verify outputs
-      ######################################################################
-      - name: Verify build artifacts
-        script: |
-          echo "=== IPA FILES ==="
-          find $CM_BUILD_DIR/build -name "*.ipa"
-
-    ########################################################################
-    # Artifacts
-    ########################################################################
     artifacts:
       - build/ios/ipa/*.ipa
       - build/App.xcarchive
 
-    ########################################################################
-    # Publishing
-    ########################################################################
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY
