@@ -10,12 +10,10 @@ workflows:
             xcode: latest
         scripts:
             - name: Install npm dependencies
-              script: |
-                  npm ci
+              script: npm ci
                   
             - name: Build web assets
-              script: |
-                  npm run build
+              script: npm run build
                   
             - name: Generate iOS project
               script: |
@@ -23,54 +21,27 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Fetch signing files via API
-              script: |
-                  echo "=== Fetching signing files from App Store Connect API ==="
-                  app-store-connect fetch-signing-files "com.lingumate.app" \
-                    --type IOS_APP_STORE \
-                    --create \
-                    --platform IOS
-                  
-            - name: Setup keychain
-              script: |
-                  echo "=== Setting up keychain ==="
-                  keychain add-certificates
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  
-            - name: Apply provisioning profile
-              script: |
-                  echo "=== Applying provisioning profiles ==="
-                  xcode-project use-profiles
-                  
-            - name: Set development team in project
+            - name: Set automatic signing
               script: |
                   cd ios/App
                   sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
-                  if ! grep -q "DEVELOPMENT_TEAM = ${TEAM_ID}" App.xcodeproj/project.pbxproj; then
-                    sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
-                  fi
+                  sed -i '' "s/CODE_SIGN_STYLE = .*/CODE_SIGN_STYLE = Automatic;/g" App.xcodeproj/project.pbxproj
+                  echo "Set Automatic signing with team ${TEAM_ID}"
                   
-            - name: Archive
+            - name: Archive and Export
               script: |
                   set -o pipefail
+                  
+                  # 归档
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
                     -archivePath "build/App.xcarchive" \
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
-                    2>&1 | tee xcodebuild.log
+                    2>&1 | tee build.log
                   
-            - name: Export IPA
-              script: |
-                  # 获取证书名称和描述文件 UUID
-                  CERT_NAME=$(security find-identity -v -p apple | grep "Apple Distribution" | head -1 | grep -o '"[^"]*"' | tr -d '"')
-                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' 2>/dev/null")
-                  
-                  echo "Using certificate: $CERT_NAME"
-                  echo "Using profile UUID: $PROFILE_UUID"
-                  
+                  # 导出
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -80,13 +51,6 @@ workflows:
                       <string>app-store-connect</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
-                      <key>signingCertificate</key>
-                      <string>${CERT_NAME}</string>
-                      <key>provisioningProfiles</key>
-                      <dict>
-                          <key>com.lingumate.app</key>
-                          <string>${PROFILE_UUID}</string>
-                      </dict>
                   </dict>
                   </plist>
                   EOF
@@ -101,7 +65,7 @@ workflows:
         artifacts:
             - build/*.ipa
             - build/App.xcarchive
-            - xcodebuild.log
+            - build.log
             - export.log
             
         publishing:
