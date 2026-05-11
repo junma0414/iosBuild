@@ -1,4 +1,3 @@
-```yaml
 workflows:
   ios-release-workflow:
     name: iOS Build for App Store Connect
@@ -154,4 +153,3 @@ workflows:
         notify:
           success: true
           failure: true
-```
