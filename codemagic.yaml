@@ -21,6 +21,21 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
+            - name: Debug - List provisioning profiles
+              script: |
+                  echo "=== Provisioning profiles in directory ==="
+                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+                  echo ""
+                  echo "=== Actual profile names ==="
+                  for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+                    if [ -f "$profile" ]; then
+                      echo "File: $(basename "$profile")"
+                      echo "Internal Name:"
+                      security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" 2>/dev/null || echo "  (failed to read)"
+                      echo ""
+                    fi
+                  done
+                  
             - name: Archive
               script: |
                   set -o pipefail
@@ -49,7 +64,7 @@ workflows:
                       <key>provisioningProfiles</key>
                       <dict>
                           <key>com.lingumate.app</key>
-                          <string>linguamate_distribution_provision</string>
+                          <string>AIVANA_codemagic</string>
                       </dict>
                   </dict>
                   </plist>
@@ -65,6 +80,8 @@ workflows:
         artifacts:
             - build/*.ipa
             - build/App.xcarchive
+            - build.log
+            - export.log
             
         publishing:
             app_store_connect:
