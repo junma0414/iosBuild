@@ -32,7 +32,7 @@ workflows:
                     -allowProvisioningUpdates \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
                     CODE_SIGN_STYLE=Manual \
-                    PROVISIONING_PROFILE_SPECIFIER="linguamate_distribution_provision" \
+                    PROVISIONING_PROFILE_SPECIFIER="AIVANA_codemagic" \
                     2>&1 | tee build.log
                   
             - name: Export IPA
