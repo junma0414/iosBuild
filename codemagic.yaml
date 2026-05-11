@@ -21,17 +21,9 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Setup keychain
-              script: |
-                  echo "=== Setup keychain ==="
-                  keychain add-certificates
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  
-            - name: Archive with manual signing
+            - name: Archive
               script: |
                   set -o pipefail
-                  echo "=== Starting Archive ==="
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
