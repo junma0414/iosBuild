@@ -11,43 +11,50 @@ workflows:
         scripts:
             - name: Install npm dependencies
               script: |
-                  npm ci
+                  echo "=== Install npm dependencies ==="
+                  npm ci 2>&1 | tee npm_install.log
                   
             - name: Build web assets
               script: |
-                  npm run build
+                  echo "=== Build web assets ==="
+                  npm run build 2>&1 | tee build.log
                   
             - name: Generate iOS project
               script: |
+                  echo "=== Generate iOS project ==="
                   rm -rf ios
-                  npx cap add ios
-                  npx cap sync ios
+                  npx cap add ios 2>&1 | tee cap_add.log
+                  npx cap sync ios 2>&1 | tee cap_sync.log
+                  
+            - name: Debug - Check environment
+              script: |
+                  echo "=== Environment Variables ==="
+                  echo "TEAM_ID = ${TEAM_ID}"
+                  echo "KEY_ID = ${APP_STORE_CONNECT_KEY_IDENTIFIER:0:10}..."
+                  echo "ISSUER_ID = ${APP_STORE_CONNECT_ISSUER_ID:0:10}..."
+                  echo "Private key length = ${#APP_STORE_CONNECT_PRIVATE_KEY}"
+                  echo ""
+                  echo "=== Xcode version ==="
+                  xcodebuild -version 2>&1 | tee xcode_version.log
+                  echo ""
+                  echo "=== Available schemes ==="
+                  xcodebuild -project ios/App/App.xcodeproj -list 2>&1 | tee schemes.log
                   
             - name: Fetch signing files via API
               script: |
-                  echo "=== Fetching signing files from App Store Connect API ==="
+                  echo "=== Fetch signing files from App Store Connect API ==="
                   app-store-connect fetch-signing-files "com.lingumate.app" \
                     --type IOS_APP_STORE \
                     --create \
-                    --platform IOS
+                    --platform IOS 2>&1 | tee fetch_signing.log
                   
                   echo "=== Downloaded provisioning profiles ==="
-                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
-                  
-            - name: Setup keychain
-              script: |
-                  echo "=== Adding certificates to keychain ==="
-                  keychain add-certificates
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  
-                  echo "=== Certificates in keychain ==="
-                  security find-identity -v -p apple
+                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>&1 | tee profiles_list.log
                   
             - name: Apply provisioning profile
               script: |
-                  echo "=== Applying provisioning profiles to project ==="
-                  xcode-project use-profiles
+                  echo "=== Applying provisioning profiles ==="
+                  xcode-project use-profiles 2>&1 | tee use_profiles.log
                   
             - name: Set development team in project
               script: |
@@ -58,6 +65,8 @@ workflows:
                     sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
                   fi
                   echo "DEVELOPMENT_TEAM set to ${TEAM_ID}"
+                  echo "=== Verifying project.pbxproj ==="
+                  grep "DEVELOPMENT_TEAM" App.xcodeproj/project.pbxproj | head -5
                   
             - name: Archive
               script: |
@@ -69,12 +78,11 @@ workflows:
                     -archivePath "build/App.xcarchive" \
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
-                    CODE_SIGN_STYLE=Manual \
-                    DEVELOPMENT_TEAM=${TEAM_ID} \
                     2>&1 | tee xcodebuild.log
                   
                   if [ ! -d "build/App.xcarchive" ]; then
                     echo "Archive failed!"
+                    ls -la build/ 2>&1 || echo "No build directory"
                     exit 1
                   fi
                   echo "Archive created successfully"
@@ -96,6 +104,9 @@ workflows:
                   </plist>
                   EOF
                   
+                  echo "exportOptions.plist created:"
+                  cat exportOptions.plist
+                  
                   xcodebuild -exportArchive \
                     -archivePath "build/App.xcarchive" \
                     -exportPath "build/" \
@@ -104,11 +115,20 @@ workflows:
                     2>&1 | tee export.log
                   
                   echo "=== Checking for IPA ==="
-                  ls -la build/*.ipa 2>/dev/null || echo "No IPA found"
+                  ls -la build/*.ipa 2>&1 || echo "No IPA found"
                   
         artifacts:
             - build/*.ipa
             - build/*.xcarchive
+            - npm_install.log
+            - build.log
+            - cap_add.log
+            - cap_sync.log
+            - xcode_version.log
+            - schemes.log
+            - fetch_signing.log
+            - profiles_list.log
+            - use_profiles.log
             - xcodebuild.log
             - export.log
             
