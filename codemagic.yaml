@@ -21,11 +21,7 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Setup keychain
-              script: |
-                  keychain add-certificates
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+            # Setup keychain 步骤已删除
                   
             - name: Apply provisioning profile
               script: |
