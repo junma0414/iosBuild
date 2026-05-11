@@ -43,41 +43,28 @@ workflows:
                   rm -f ios/App/Podfile || true
                   rm -f ios/App/Podfile.lock || true
 
-            # 4. 获取 iOS 签名文件（自动创建证书和描述文件）
-            - name: Fetch iOS signing files
+            # 4. 使用自动签名获取证书和描述文件
+            - name: Fetch iOS signing files (automatic)
               script: |
+                  # 使用 API 自动获取/创建证书和描述文件
                   app-store-connect fetch-signing-files "com.lingumate.app" \
                     --type IOS_APP_STORE \
                     --create \
                     --platform IOS
 
-            # 5. 设置 Xcode 项目的开发团队
-            - name: Set development team in Xcode project
+            # 5. 设置自动签名
+            - name: Setup automatic signing
               script: |
-                  cd ios/App
+                  # 设置钥匙串
+                  keychain add-certificates
                   
-                  # 使用 ruby 脚本设置团队 ID
-                  ruby -e "
-                    require 'xcodeproj'
-                    project_path = 'App.xcodeproj'
-                    project = Xcodeproj::Project.open(project_path)
-                    project.targets.each do |target|
-                      if target.name == 'App'
-                        target.build_configurations.each do |config|
-                          config.build_settings['DEVELOPMENT_TEAM'] = '${TEAM_ID}'
-                          config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
-                        end
-                      end
-                    end
-                    project.save
-                  " || echo "Ruby script failed, trying plist method"
+                  # 解锁钥匙串
+                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
                   
-                  # 备用方法：使用 PlistBuddy（如果 ruby 不可用）
-                  /usr/libexec/PlistBuddy -c "Set :objects:???:buildSettings:DEVELOPMENT_TEAM ${TEAM_ID}" App.xcodeproj/project.pbxproj || true
-                  
-                  echo "Set DEVELOPMENT_TEAM to ${TEAM_ID}"
+                  # 使用 xcode-project use-profiles 自动配置
+                  xcode-project use-profiles
 
-            # 6. 构建 ipa（使用自动签名）
+            # 6. 构建 ipa（自动签名）
             - name: Build ipa with automatic signing
               script: |
                   # 设置项目路径
@@ -86,7 +73,7 @@ workflows:
                   ARCHIVE_PATH="build/App.xcarchive"
                   EXPORT_PATH="build"
                   
-                  # 创建 exportOptions.plist 文件（使用自动签名）
+                  # 创建 exportOptions.plist 文件（自动签名）
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -108,7 +95,7 @@ workflows:
                     -scheme "$SCHEME" \
                     -allowProvisioningUpdates || true
                   
-                  # 归档（Archive）- 让 Xcode 自动处理签名
+                  # 归档（Archive）- 使用自动签名
                   xcodebuild archive \
                     -project "$PROJECT_PATH" \
                     -scheme "$SCHEME" \
