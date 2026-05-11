@@ -30,10 +30,7 @@ workflows:
         script: |
           npx cap sync ios
 
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios/App
-          pod install
+      # pod install 步骤已删除（项目使用 SPM）
 
       - name: Show signing identities
         script: |
@@ -60,16 +57,12 @@ workflows:
           "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
-
               <key>method</key>
               <string>app-store</string>
-
               <key>signingStyle</key>
               <string>automatic</string>
-
               <key>teamID</key>
               <string>${TEAM_ID}</string>
-
           </dict>
           </plist>
           EOF
@@ -98,7 +91,6 @@ workflows:
       email:
         recipients:
           - junma0614@gmail.com
-
         notify:
           success: true
           failure: true
