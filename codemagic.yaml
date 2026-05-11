@@ -51,18 +51,21 @@ workflows:
                   sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' App.xcodeproj/project.pbxproj
                   sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
                   
-                  # 清除可能冲突的描述文件配置，让 xcode-project use-profiles 的设置生效
+                  # 清除可能冲突的描述文件配置，让命令行参数生效
                   sed -i '' '/PROVISIONING_PROFILE/d' App.xcodeproj/project.pbxproj
                   
                   echo "Manual signing and Team ID configured."
                   
             - name: Build IPA
               script: |
-                  # 获取描述文件 UUID (确保路径正确)
-                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' 2>/dev/null")
-                  echo "Using Profile UUID: $PROFILE_UUID"
+                  # 1. 获取描述文件的 UUID 和 名称
+                  PROV_PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -1)
+                  PROFILE_UUID=$(security cms -D -i "$PROV_PROFILE_PATH" | /usr/libexec/PlistBuddy -c "Print UUID")
+                  PROFILE_NAME=$(security cms -D -i "$PROV_PROFILE_PATH" | /usr/libexec/PlistBuddy -c "Print Name")
                   
-                  # 创建 exportOptions.plist
+                  echo "Using Profile: $PROFILE_NAME ($PROFILE_UUID)"
+                  
+                  # 2. 创建 exportOptions.plist
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -77,7 +80,7 @@ workflows:
                       <key>provisioningProfiles</key>
                       <dict>
                           <key>com.lingumate.app</key>
-                          <string>${PROFILE_UUID}</string>
+                          <string>$PROFILE_NAME</string>
                       </dict>
                       <key>manageAppVersionAndBuildNumber</key>
                       <true/>
@@ -85,28 +88,30 @@ workflows:
                   </plist>
                   EOF
                   
-                  # 清理并归档
-                  # 注意：不要在命令行强制 CODE_SIGN_STYLE=Automatic ，这会覆盖项目设置
+                  # 3. 执行归档 (Archive )
+                  # 显式传入 PROVISIONING_PROFILE 确保 xcodebuild 能找到它
                   xcodebuild clean archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
                     -archivePath "build/App.xcarchive" \
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
-                    DEVELOPMENT_TEAM=${TEAM_ID}
+                    DEVELOPMENT_TEAM=${TEAM_ID} \
+                    CODE_SIGN_STYLE=Manual \
+                    PROVISIONING_PROFILE=$PROFILE_UUID \
+                    PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
                   
-                  # 检查归档
-                  if [ ! -d "build/App.xcarchive" ]; then
+                  # 4. 导出 IPA
+                  if [ -d "build/App.xcarchive" ]; then
+                    xcodebuild -exportArchive \
+                      -archivePath "build/App.xcarchive" \
+                      -exportPath "build/" \
+                      -exportOptionsPlist exportOptions.plist \
+                      -allowProvisioningUpdates
+                  else
                     echo "Archive failed!"
                     exit 1
                   fi
-                  
-                  # 导出 IPA
-                  xcodebuild -exportArchive \
-                    -archivePath "build/App.xcarchive" \
-                    -exportPath "build/" \
-                    -exportOptionsPlist exportOptions.plist \
-                    -allowProvisioningUpdates
                     
         artifacts:
             - build/*.ipa
