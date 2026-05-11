@@ -7,26 +7,22 @@ workflows:
         instance_type: mac_mini_m2
         # 最大构建时间（分钟）
         max_build_duration: 60
-
         environment:
             # 这里导入我们在 Codemagic 后台要设置的敏感信息组
             groups:
                 - ios_credentials # 专门用来存放 iOS 证书和 API 密钥的组
             node: latest
             xcode: latest
-
         # 定义构建过程中要执行的脚本
         scripts:
             # 1. 安装 Node.js 依赖
             - name: Install npm dependencies
               script: |
                   npm ci
-
             # 2. 构建前端代码（生成 dist 文件夹）
             - name: Build web assets
               script: |
                   npm run build
-
             # 3. 重新生成 iOS 项目
             - name: Regenerate iOS project
               script: |
@@ -42,8 +38,7 @@ workflows:
                   # 删除可能残留的 Podfile
                   rm -f ios/App/Podfile || true
                   rm -f ios/App/Podfile.lock || true
-
-            # 4. 清理 project.pbxproj 中的所有手动签名配置
+            # 4. 彻底清理 project.pbxproj 中的所有手动签名配置
             - name: Remove all manual signing settings from project
               script: |
                   cd ios/App
@@ -58,13 +53,13 @@ workflows:
                   sed -i '' '/PROVISIONING_PROFILE/d' App.xcodeproj/project.pbxproj
                   
                   # 将 CODE_SIGN_STYLE 设置为 Automatic
-                  sed -i '' 's/CODE_SIGN_STYLE = ".*";/CODE_SIGN_STYLE = Automatic;/g' App.xcodeproj/project.pbxproj
+                  # 使用更通用的匹配方式确保替换成功
+                  sed -i '' 's/CODE_SIGN_STYLE = [^;]*;/CODE_SIGN_STYLE = Automatic;/g' App.xcodeproj/project.pbxproj
                   
-                  # 删除可能存在的 DEVELOPMENT_TEAM 旧值（稍后会通过命令行重新设置）
+                  # 删除所有 DEVELOPMENT_TEAM 行，确保使用命令行传入的 TEAM_ID
                   sed -i '' '/DEVELOPMENT_TEAM/d' App.xcodeproj/project.pbxproj
                   
                   echo "Manual signing settings removed from project.pbxproj"
-
             # 5. 获取 iOS 签名文件（自动创建证书和描述文件）
             - name: Fetch iOS signing files
               script: |
@@ -72,7 +67,6 @@ workflows:
                     --type IOS_APP_STORE \
                     --create \
                     --platform IOS
-
             # 6. 设置钥匙串和签名
             - name: Setup keychain and signing
               script: |
@@ -83,8 +77,8 @@ workflows:
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
                   
                   # 使用 xcode-project use-profiles 自动配置
+                  # 这一步会根据 fetch 到的 profile 自动更新项目配置
                   xcode-project use-profiles
-
             # 7. 构建 ipa（自动签名）
             - name: Build ipa with automatic signing
               script: |
@@ -95,6 +89,7 @@ workflows:
                   EXPORT_PATH="build"
                   
                   # 创建 exportOptions.plist 文件（自动签名）
+                  # 注意：在自动签名模式下，通常不需要在 plist 中指定 provisioningProfiles
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -106,6 +101,8 @@ workflows:
                       <string>${TEAM_ID}</string>
                       <key>signingStyle</key>
                       <string>automatic</string>
+                      <key>manageAppVersionAndBuildNumber</key>
+                      <true/>
                   </dict>
                   </plist>
                   EOF
@@ -116,7 +113,7 @@ workflows:
                     -scheme "$SCHEME" \
                     -allowProvisioningUpdates || true
                   
-                  # 归档（Archive）- 使用自动签名
+                  # 归档（Archive ）- 显式强制使用自动签名和指定的 Team ID
                   xcodebuild archive \
                     -project "$PROJECT_PATH" \
                     -scheme "$SCHEME" \
@@ -124,7 +121,8 @@ workflows:
                     -allowProvisioningUpdates \
                     -destination 'generic/platform=iOS' \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Automatic
+                    CODE_SIGN_STYLE=Automatic \
+                    CODE_SIGN_IDENTITY="Apple Distribution"
                   
                   # 检查归档是否成功
                   if [ ! -d "$ARCHIVE_PATH" ]; then
@@ -138,14 +136,12 @@ workflows:
                     -exportPath "$EXPORT_PATH" \
                     -exportOptionsPlist exportOptions.plist \
                     -allowProvisioningUpdates
-
         # 指定 Codemagic 在构建完成后需要提取的文件
         artifacts:
             - build/*.ipa
             - build/*.xcarchive
             - /tmp/xcodebuild_logs/*.log
             - exportOptions.plist
-
         # 配置构建产物的发布选项
         publishing:
             # 自动将 .ipa 上传到 App Store Connect
