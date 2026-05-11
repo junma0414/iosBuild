@@ -10,12 +10,10 @@ workflows:
             xcode: latest
         scripts:
             - name: Install npm dependencies
-              script: |
-                  npm ci
+              script: npm ci
                   
             - name: Build web assets
-              script: |
-                  npm run build
+              script: npm run build
                   
             - name: Generate iOS project
               script: |
@@ -23,60 +21,16 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Fetch signing files from API (as fallback)
+            - name: Build IPA with xcode-project
               script: |
-                  # 即使 UI 上传了，也通过 API 再获取一次，确保描述文件与证书匹配
-                  app-store-connect fetch-signing-files "com.lingumate.app" \
-                    --type IOS_APP_STORE \
-                    --create \
-                    --platform IOS
-                  
-            - name: Setup keychain and certificates
-              script: |
-                  # 添加证书到钥匙串
-                  keychain add-certificates
-                  # 解锁钥匙串
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  # 设置钥匙串权限（修复 errSecInternalComponent）
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  # 应用描述文件到 Xcode 项目
-                  xcode-project use-profiles
-                  
-            - name: Build IPA
-              script: |
-                  cat > exportOptions.plist <<EOF
-                  <?xml version="1.0" encoding="UTF-8"?>
-                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-                  <plist version="1.0">
-                  <dict>
-                      <key>method</key>
-                      <string>app-store</string>
-                      <key>teamID</key>
-                      <string>${TEAM_ID}</string>
-                  </dict>
-                  </plist>
-                  EOF
-                  
-                  xcodebuild clean \
-                    -project "ios/App/App.xcodeproj" \
-                    -scheme "App" || true
-                  
-                  xcodebuild archive \
-                    -project "ios/App/App.xcodeproj" \
-                    -scheme "App" \
-                    -archivePath "build/App.xcarchive" \
-                    -destination 'generic/platform=iOS' \
-                    -allowProvisioningUpdates
-                  
-                  xcodebuild -exportArchive \
-                    -archivePath "build/App.xcarchive" \
-                    -exportPath "build/" \
-                    -exportOptionsPlist exportOptions.plist \
-                    -allowProvisioningUpdates
+                  xcode-project build-ipa \
+                    --project "ios/App/App.xcodeproj" \
+                    --scheme "App" \
+                    --archive-flags "-destination 'generic/platform/iOS'" \
+                    --export-method app-store
                     
         artifacts:
-            - build/*.ipa
-            - build/*.xcarchive
+            - build/ios/ipa/*.ipa
             
         publishing:
             app_store_connect:
