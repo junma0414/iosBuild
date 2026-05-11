@@ -23,27 +23,32 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Set development team in Xcode project
+            - name: Fetch signing files
+              script: |
+                  app-store-connect fetch-signing-files "com.lingumate.app" \
+                    --type IOS_APP_STORE \
+                    --create \
+                    --platform IOS
+                  
+            - name: Setup keychain
+              script: |
+                  keychain add-certificates
+                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+                  xcode-project use-profiles
+                  
+            - name: Set manual signing in project
               script: |
                   cd ios/App
-                  
-                  # 使用 sed 命令直接设置 DEVELOPMENT_TEAM
+                  # 强制设置为手动签名
+                  sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' App.xcodeproj/project.pbxproj
                   sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
                   
-                  # 如果没有 DEVELOPMENT_TEAM 行，则添加
-                  grep -q "DEVELOPMENT_TEAM" App.xcodeproj/project.pbxproj || \
-                  sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Automatic;\n\t\t\t\tDEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
-                  
-                  echo "Set DEVELOPMENT_TEAM to ${TEAM_ID} in project.pbxproj"
-                  
-            - name: Build ipa with automatic signing
+            - name: Build IPA
               script: |
-                  PROJECT_PATH="ios/App/App.xcodeproj"
-                  SCHEME="App"
-                  ARCHIVE_PATH="build/App.xcarchive"
-                  EXPORT_PATH="build"
+                  # 获取描述文件 UUID
+                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' 2>/dev/null")
                   
-                  # 创建 exportOptions.plist 文件
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -53,41 +58,36 @@ workflows:
                       <string>app-store</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
+                      <key>provisioningProfiles</key>
+                      <dict>
+                          <key>com.lingumate.app</key>
+                          <string>${PROFILE_UUID}</string>
+                      </dict>
                   </dict>
                   </plist>
                   EOF
                   
-                  # 清理之前的构建
                   xcodebuild clean \
-                    -project "$PROJECT_PATH" \
-                    -scheme "$SCHEME" \
+                    -project "ios/App/App.xcodeproj" \
+                    -scheme "App" \
                     -allowProvisioningUpdates || true
                   
-                  # 归档（Archive）
                   xcodebuild archive \
-                    -project "$PROJECT_PATH" \
-                    -scheme "$SCHEME" \
-                    -archivePath "$ARCHIVE_PATH" \
+                    -project "ios/App/App.xcodeproj" \
+                    -scheme "App" \
+                    -archivePath "build/App.xcarchive" \
                     -allowProvisioningUpdates \
-                    -destination 'generic/platform=iOS' \
-                    DEVELOPMENT_TEAM=${TEAM_ID}
+                    -destination 'generic/platform=iOS'
                   
-                  if [ ! -d "$ARCHIVE_PATH" ]; then
-                    echo "Archive failed!"
-                    exit 1
-                  fi
-                  
-                  # 从归档导出 IPA
                   xcodebuild -exportArchive \
-                    -archivePath "$ARCHIVE_PATH" \
-                    -exportPath "$EXPORT_PATH" \
+                    -archivePath "build/App.xcarchive" \
+                    -exportPath "build/" \
                     -exportOptionsPlist exportOptions.plist \
                     -allowProvisioningUpdates
                     
         artifacts:
             - build/*.ipa
             - build/*.xcarchive
-            - exportOptions.plist
             
         publishing:
             app_store_connect:
