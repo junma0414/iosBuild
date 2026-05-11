@@ -10,10 +10,12 @@ workflows:
             xcode: latest
         scripts:
             - name: Install npm dependencies
-              script: npm ci
+              script: |
+                  npm ci
                   
             - name: Build web assets
-              script: npm run build
+              script: |
+                  npm run build
                   
             - name: Generate iOS project
               script: |
@@ -21,26 +23,40 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Debug - Check environment
+            - name: Debug - Check environment variables
               script: |
+                  echo "=== Environment Variables ==="
+                  echo "TEAM_ID = ${TEAM_ID}"
+                  echo "KEY_ID = ${APP_STORE_CONNECT_KEY_IDENTIFIER:0:10}..."
+                  echo "ISSUER_ID = ${APP_STORE_CONNECT_ISSUER_ID:0:10}..."
+                  echo "Private key length = ${#APP_STORE_CONNECT_PRIVATE_KEY}"
+                  echo ""
                   echo "=== Xcode version ==="
                   xcodebuild -version
+                  echo ""
                   echo "=== Available schemes ==="
                   xcodebuild -project ios/App/App.xcodeproj -list
-                  echo "=== Check signing certificates ==="
-                  security find-identity -v -p apple
-                  echo "=== Check provisioning profiles ==="
-                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles found"
+                  echo ""
+                  echo "=== Certificates in keychain ==="
+                  security find-identity -v -p apple || echo "No certificates found"
+                  echo ""
+                  echo "=== Provisioning profiles ==="
+                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles directory"
                   
-            - name: Clean build
+            - name: Set development team in project
               script: |
-                  xcodebuild clean \
-                    -project "ios/App/App.xcodeproj" \
-                    -scheme "App" 2>&1
+                  cd ios/App
+                  echo "=== Setting DEVELOPMENT_TEAM in project.pbxproj ==="
+                  sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
+                  if ! grep -q "DEVELOPMENT_TEAM = ${TEAM_ID}" App.xcodeproj/project.pbxproj; then
+                    sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
+                  fi
+                  echo "DEVELOPMENT_TEAM set to ${TEAM_ID}"
                   
-            - name: Archive (with full logging)
+            - name: Archive
               script: |
                   set -o pipefail
+                  echo "=== Starting Archive ==="
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
@@ -48,18 +64,21 @@ workflows:
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
                     CODE_SIGN_STYLE=Manual \
+                    DEVELOPMENT_TEAM=${TEAM_ID} \
                     PROVISIONING_PROFILE_SPECIFIER="APP ID for lingumate ios_app_store 1778428934" \
                     2>&1 | tee xcodebuild.log
                   
                   echo "=== Archive exit code: $? ==="
-                  ls -la build/ 2>/dev/null || echo "No build directory"
+                  if [ ! -d "build/App.xcarchive" ]; then
+                    echo "Archive directory not found!"
+                    ls -la build/ 2>/dev/null || echo "No build directory"
+                    exit 1
+                  fi
+                  echo "Archive created successfully"
                   
             - name: Export IPA
               script: |
-                  if [ ! -d "build/App.xcarchive" ]; then
-                    echo "Archive not found, skipping export"
-                    exit 1
-                  fi
+                  echo "=== Starting Export ==="
                   
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
@@ -70,22 +89,35 @@ workflows:
                       <string>app-store</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
+                      <key>provisioningProfiles</key>
+                      <dict>
+                          <key>com.lingumate.app</key>
+                          <string>APP ID for lingumate ios_app_store 1778428934</string>
+                      </dict>
                   </dict>
                   </plist>
                   EOF
+                  
+                  echo "exportOptions.plist created:"
+                  cat exportOptions.plist
                   
                   xcodebuild -exportArchive \
                     -archivePath "build/App.xcarchive" \
                     -exportPath "build/" \
                     -exportOptionsPlist exportOptions.plist \
-                    -allowProvisioningUpdates 2>&1 | tee export.log
-                    
+                    -allowProvisioningUpdates \
+                    2>&1 | tee export.log
+                  
+                  echo "=== Export exit code: $? ==="
+                  echo "=== Checking for IPA ==="
+                  ls -la build/*.ipa 2>/dev/null || echo "No IPA found"
+                  
         artifacts:
             - build/*.ipa
             - build/*.xcarchive
             - xcodebuild.log
             - export.log
-            - /tmp/xcodebuild_logs/*.log
+            - $HOME/Library/Developer/Xcode/DerivedData/**/Logs/**/*.xcactivitylog
             
         publishing:
             app_store_connect:
