@@ -23,18 +23,27 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Setup keychain
+            - name: Fetch signing files from API (as fallback)
               script: |
-                  # 将上传的证书添加到钥匙串
+                  # 即使 UI 上传了，也通过 API 再获取一次，确保描述文件与证书匹配
+                  app-store-connect fetch-signing-files "com.lingumate.app" \
+                    --type IOS_APP_STORE \
+                    --create \
+                    --platform IOS
+                  
+            - name: Setup keychain and certificates
+              script: |
+                  # 添加证书到钥匙串
                   keychain add-certificates
                   # 解锁钥匙串
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  # 设置钥匙串权限（解决 errSecInternalComponent）
+                  # 设置钥匙串权限（修复 errSecInternalComponent）
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+                  # 应用描述文件到 Xcode 项目
+                  xcode-project use-profiles
                   
             - name: Build IPA
               script: |
-                  # 导出选项
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -48,12 +57,10 @@ workflows:
                   </plist>
                   EOF
                   
-                  # 清理
                   xcodebuild clean \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" || true
                   
-                  # 归档
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
@@ -61,7 +68,6 @@ workflows:
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates
                   
-                  # 导出 IPA
                   xcodebuild -exportArchive \
                     -archivePath "build/App.xcarchive" \
                     -exportPath "build/" \
