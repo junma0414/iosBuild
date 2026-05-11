@@ -8,11 +8,10 @@ workflows:
                 - ios_credentials
             node: latest
             xcode: latest
-        # 证书和描述文件放在 environment 的同级
-        certificates:
-            - linguamate_distribution_cert
-        provisioning_profiles:
-            - linguamate_distribution_provision
+            certificates:
+                - certificate: linguamate_distribution_cert
+            provisioning_profiles:
+                - profile: linguamate_distribution_provision
         scripts:
             - name: Install npm dependencies
               script: npm ci
