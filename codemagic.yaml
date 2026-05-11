@@ -43,17 +43,27 @@ workflows:
                   rm -f ios/App/Podfile || true
                   rm -f ios/App/Podfile.lock || true
 
-            # 4. 获取 iOS 签名文件（自动创建证书和描述文件）
+            # 4. 清理旧的证书文件（避免密码问题）
+            - name: Clean old certificate files
+              script: |
+                  # 删除 Codemagic 可能缓存的旧证书
+                  rm -rf ~/Library/Developer/Xcode/UserData/Certificates/*.p12 || true
+                  rm -rf ~/Library/MobileDevice/Certificates/*.p12 || true
+                  echo "Cleaned old certificate files"
+
+            # 5. 获取 iOS 签名文件（自动创建新的证书和描述文件）
             - name: Fetch iOS signing files
               script: |
+                  # --create 会自动创建证书，无需密码
                   app-store-connect fetch-signing-files "com.lingumate.app" \
                     --type IOS_APP_STORE \
                     --create \
                     --platform IOS
 
-            # 5. 设置钥匙串并导入证书（简化版）
+            # 6. 设置钥匙串并导入证书
             - name: Setup keychain
               script: |
+                  # 添加证书到钥匙串
                   keychain add-certificates
                   
                   # 解锁钥匙串
@@ -62,18 +72,18 @@ workflows:
                   # 设置钥匙串分区列表，解决签名权限问题
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
 
-            # 6. 设置 Xcode 项目的代码签名
+            # 7. 设置 Xcode 项目的代码签名
             - name: Set up code signing settings
               script: |
                   xcode-project use-profiles
 
-            # 7. 增加构建版本号
+            # 8. 增加构建版本号
             - name: Increment build number
               script: |
                   cd ios/App
                   agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956") + 1))
 
-            # 8. 手动构建 .ipa 文件
+            # 9. 手动构建 .ipa 文件
             - name: Build ipa
               script: |
                   # 设置项目路径
