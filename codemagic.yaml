@@ -8,6 +8,11 @@ workflows:
                 - ios_credentials
             node: latest
             xcode: latest
+            # 指定使用 UI 上传的证书和描述文件
+            certificates:
+                - linguamate_distribution_cert
+            provisioning_profiles:
+                - linguamate_distribution_provision
         scripts:
             - name: Install npm dependencies
               script: npm ci
@@ -20,12 +25,6 @@ workflows:
                   rm -rf ios
                   npx cap add ios
                   npx cap sync ios
-                  
-            # Setup keychain 步骤已删除
-                  
-            - name: Apply provisioning profile
-              script: |
-                  xcode-project use-profiles
                   
             - name: Archive
               script: |
