@@ -29,30 +29,46 @@ workflows:
                     --create \
                     --platform IOS
                   
-                  echo "=== Files in provisioning profiles directory ==="
-                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
-                  
-                  echo "=== Extracting all profile names ==="
-                  for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
-                    if [ -f "$profile" ]; then
-                      echo "--- $(basename "$profile") ---"
-                      security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null || echo "Failed to read"
-                    fi
-                  done
-                  
-            - name: Setup keychain
+            - name: Setup keychain (stable version)
               script: |
                   echo "=== Setup keychain ==="
                   keychain add-certificates
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  echo "=== Available certificates ==="
-                  security find-identity -v -p apple
+                  echo "=== Certificates in keychain ==="
+                  security find-identity -v -p apple || echo "No certificates found"
                   
-            - name: Archive - try automatic signing
+            - name: Debug - List provisioning profiles
+              script: |
+                  echo "=== Provisioning profiles directory ==="
+                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "Directory does not exist"
+                  echo ""
+                  echo "=== Extracting profile names ==="
+                  PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
+                  if [ -d "$PROFILES_DIR" ]; then
+                    for profile in "$PROFILES_DIR"/*.mobileprovision; do
+                      if [ -f "$profile" ]; then
+                        echo "File: $(basename "$profile")"
+                        NAME=$(security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
+                        UUID=$(security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
+                        echo "  Name: $NAME"
+                        echo "  UUID: $UUID"
+                        echo ""
+                      fi
+                    done
+                  else
+                    echo "Provisioning profiles directory not found!"
+                  fi
+                  
+            - name: Apply profile to project
+              script: |
+                  echo "=== Applying profile with xcode-project ==="
+                  xcode-project use-profiles
+                  
+            - name: Archive with automatic signing
               script: |
                   set -o pipefail
-                  echo "=== Archive with automatic signing ==="
+                  echo "=== Starting Archive ==="
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
@@ -86,7 +102,7 @@ workflows:
                       -allowProvisioningUpdates \
                       2>&1 | tee export.log
                   else
-                    echo "Archive not found, skipping export"
+                    echo "Archive failed, skipping export"
                     exit 1
                   fi
                   
