@@ -31,20 +31,12 @@ workflows:
                     --create \
                     --platform IOS
                   
-            - name: Setup keychain and certificates
+            - name: Setup keychain
               script: |
                   echo "=== Setting up keychain ==="
-                  # 使用 Codemagic 内置命令添加证书
                   keychain add-certificates
-                  
-                  # 解锁钥匙串
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  
-                  # 设置钥匙串分区列表
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  
-                  echo "=== Available certificates ==="
-                  security find-identity -v -p apple || echo "No identities found"
                   
             - name: Apply provisioning profile
               script: |
@@ -54,17 +46,14 @@ workflows:
             - name: Set development team in project
               script: |
                   cd ios/App
-                  echo "=== Setting DEVELOPMENT_TEAM in project.pbxproj ==="
                   sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
                   if ! grep -q "DEVELOPMENT_TEAM = ${TEAM_ID}" App.xcodeproj/project.pbxproj; then
                     sed -i '' "s/CODE_SIGN_STYLE = Manual;/CODE_SIGN_STYLE = Manual;\n\t\t\t\tDEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
                   fi
-                  echo "DEVELOPMENT_TEAM set to ${TEAM_ID}"
                   
             - name: Archive
               script: |
                   set -o pipefail
-                  echo "=== Starting Archive ==="
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
@@ -73,15 +62,14 @@ workflows:
                     -allowProvisioningUpdates \
                     2>&1 | tee xcodebuild.log
                   
-                  if [ ! -d "build/App.xcarchive" ]; then
-                    echo "Archive failed!"
-                    exit 1
-                  fi
-                  echo "Archive created successfully"
-                  
             - name: Export IPA
               script: |
-                  echo "=== Starting Export ==="
+                  # 获取证书名称和描述文件 UUID
+                  CERT_NAME=$(security find-identity -v -p apple | grep "Apple Distribution" | head -1 | grep -o '"[^"]*"' | tr -d '"')
+                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' 2>/dev/null")
+                  
+                  echo "Using certificate: $CERT_NAME"
+                  echo "Using profile UUID: $PROFILE_UUID"
                   
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
@@ -92,6 +80,13 @@ workflows:
                       <string>app-store-connect</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
+                      <key>signingCertificate</key>
+                      <string>${CERT_NAME}</string>
+                      <key>provisioningProfiles</key>
+                      <dict>
+                          <key>com.lingumate.app</key>
+                          <string>${PROFILE_UUID}</string>
+                      </dict>
                   </dict>
                   </plist>
                   EOF
@@ -102,9 +97,6 @@ workflows:
                     -exportOptionsPlist exportOptions.plist \
                     -allowProvisioningUpdates \
                     2>&1 | tee export.log
-                  
-                  echo "=== Checking for IPA ==="
-                  ls -la build/*.ipa 2>&1 || echo "No IPA found"
                   
         artifacts:
             - build/*.ipa
