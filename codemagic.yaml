@@ -26,11 +26,10 @@ workflows:
         script: |
           npm run build
 
-      - name: Sync Capacitor iOS
+      - name: Sync Capacitor iOS (skip pod install)
         script: |
-          npx cap sync ios
-
-      # pod install 步骤已删除（项目使用 SPM）
+          # 生成 iOS 项目但不运行 pod install
+          npx cap sync ios --no-pod
 
       - name: Show signing identities
         script: |
