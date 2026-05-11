@@ -31,27 +31,20 @@ workflows:
                     --create \
                     --platform IOS
                   
-            - name: Import certificates to keychain
+            - name: Setup keychain and certificates
               script: |
-                  echo "=== Importing certificates to keychain ==="
-                  # 解锁默认钥匙串
+                  echo "=== Setting up keychain ==="
+                  # 使用 Codemagic 内置命令添加证书
+                  keychain add-certificates
+                  
+                  # 解锁钥匙串
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
                   
-                  # 查找并导入所有 p12 证书
-                  if [ -d "$HOME/Library/Developer/Xcode/UserData/Certificates" ]; then
-                    for cert in ~/Library/Developer/Xcode/UserData/Certificates/*.p12; do
-                      if [ -f "$cert" ]; then
-                        echo "Importing $cert"
-                        security import "$cert" -k ~/Library/Keychains/login.keychain-db -P "" -T /usr/bin/codesign
-                      fi
-                    done
-                  fi
-                  
-                  # 设置钥匙串分区列表（解决访问权限）
+                  # 设置钥匙串分区列表
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
                   
                   echo "=== Available certificates ==="
-                  security find-identity -v -p apple
+                  security find-identity -v -p apple || echo "No identities found"
                   
             - name: Apply provisioning profile
               script: |
