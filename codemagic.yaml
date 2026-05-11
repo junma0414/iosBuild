@@ -21,11 +21,7 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Setup keychain
-              script: |
-                  keychain add-certificates
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+            # 删除 Setup keychain 步骤
                   
             - name: Apply provisioning profile
               script: |
@@ -45,7 +41,6 @@ workflows:
                   
             - name: Export IPA
               script: |
-                  # 获取 UI 上传的描述文件信息
                   PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
                   if [ -z "$PROFILE_PATH" ]; then
                     echo "ERROR: No provisioning profile found!"
@@ -53,10 +48,8 @@ workflows:
                   fi
                   
                   PROFILE_NAME=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
-                  PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
                   
                   echo "Using Provisioning Profile: $PROFILE_NAME"
-                  echo "Profile UUID: $PROFILE_UUID"
                   
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
