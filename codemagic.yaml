@@ -51,7 +51,33 @@ workflows:
                     --create \
                     --platform IOS
 
-            # 5. 直接构建，让 Xcode 自动处理签名
+            # 5. 设置 Xcode 项目的开发团队
+            - name: Set development team in Xcode project
+              script: |
+                  cd ios/App
+                  
+                  # 使用 ruby 脚本设置团队 ID
+                  ruby -e "
+                    require 'xcodeproj'
+                    project_path = 'App.xcodeproj'
+                    project = Xcodeproj::Project.open(project_path)
+                    project.targets.each do |target|
+                      if target.name == 'App'
+                        target.build_configurations.each do |config|
+                          config.build_settings['DEVELOPMENT_TEAM'] = '${TEAM_ID}'
+                          config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
+                        end
+                      end
+                    end
+                    project.save
+                  " || echo "Ruby script failed, trying plist method"
+                  
+                  # 备用方法：使用 PlistBuddy（如果 ruby 不可用）
+                  /usr/libexec/PlistBuddy -c "Set :objects:???:buildSettings:DEVELOPMENT_TEAM ${TEAM_ID}" App.xcodeproj/project.pbxproj || true
+                  
+                  echo "Set DEVELOPMENT_TEAM to ${TEAM_ID}"
+
+            # 6. 构建 ipa（使用自动签名）
             - name: Build ipa with automatic signing
               script: |
                   # 设置项目路径
@@ -88,7 +114,9 @@ workflows:
                     -scheme "$SCHEME" \
                     -archivePath "$ARCHIVE_PATH" \
                     -allowProvisioningUpdates \
-                    -destination 'generic/platform=iOS'
+                    -destination 'generic/platform=iOS' \
+                    DEVELOPMENT_TEAM=${TEAM_ID} \
+                    CODE_SIGN_STYLE=Automatic
                   
                   # 从归档导出 IPA
                   xcodebuild -exportArchive \
