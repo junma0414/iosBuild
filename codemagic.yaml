@@ -21,24 +21,38 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Debug - List provisioning profiles
+            - name: Fetch signing files via API
               script: |
-                  echo "=== Provisioning profiles in directory ==="
+                  echo "=== Fetch signing files ==="
+                  app-store-connect fetch-signing-files "com.lingumate.app" \
+                    --type IOS_APP_STORE \
+                    --create \
+                    --platform IOS
+                  
+                  echo "=== Files in provisioning profiles directory ==="
                   ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
-                  echo ""
-                  echo "=== Actual profile names ==="
+                  
+                  echo "=== Extracting all profile names ==="
                   for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
                     if [ -f "$profile" ]; then
-                      echo "File: $(basename "$profile")"
-                      echo "Internal Name:"
-                      security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" 2>/dev/null || echo "  (failed to read)"
-                      echo ""
+                      echo "--- $(basename "$profile") ---"
+                      security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null || echo "Failed to read"
                     fi
                   done
                   
-            - name: Archive
+            - name: Setup keychain
+              script: |
+                  echo "=== Setup keychain ==="
+                  keychain add-certificates
+                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+                  echo "=== Available certificates ==="
+                  security find-identity -v -p apple
+                  
+            - name: Archive - try automatic signing
               script: |
                   set -o pipefail
+                  echo "=== Archive with automatic signing ==="
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
@@ -46,8 +60,7 @@ workflows:
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Manual \
-                    PROVISIONING_PROFILE_SPECIFIER="AIVANA PTE. LTD." \
+                    CODE_SIGN_STYLE=Automatic \
                     2>&1 | tee build.log
                   
             - name: Export IPA
@@ -61,21 +74,21 @@ workflows:
                       <string>app-store-connect</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
-                      <key>provisioningProfiles</key>
-                      <dict>
-                          <key>com.lingumate.app</key>
-                          <string>AIVANA_codemagic</string>
-                      </dict>
                   </dict>
                   </plist>
                   EOF
                   
-                  xcodebuild -exportArchive \
-                    -archivePath "build/App.xcarchive" \
-                    -exportPath "build/" \
-                    -exportOptionsPlist exportOptions.plist \
-                    -allowProvisioningUpdates \
-                    2>&1 | tee export.log
+                  if [ -d "build/App.xcarchive" ]; then
+                    xcodebuild -exportArchive \
+                      -archivePath "build/App.xcarchive" \
+                      -exportPath "build/" \
+                      -exportOptionsPlist exportOptions.plist \
+                      -allowProvisioningUpdates \
+                      2>&1 | tee export.log
+                  else
+                    echo "Archive not found, skipping export"
+                    exit 1
+                  fi
                   
         artifacts:
             - build/*.ipa
