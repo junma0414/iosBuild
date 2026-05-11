@@ -15,27 +15,75 @@ workflows:
             - name: Build web assets
               script: npm run build
                   
-            - name: Generate iOS project
+            - name: Generate fresh iOS project
               script: |
                   rm -rf ios
                   npx cap add ios
                   npx cap sync ios
                   
+            - name: Force download certificates & profiles via API
+              script: |
+                  echo "=== Fetching signing files via API (ensure latest) ==="
+                  app-store-connect fetch-signing-files "com.lingumate.app" \
+                    --type IOS_APP_STORE \
+                    --create \
+                    --platform IOS
+                  
+            - name: Setup keychain and manually import certificate
+              script: |
+                  echo "=== Setting up keychain and installing certificate ==="
+                  # 解锁钥匙串
+                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  
+                  # 查找并导入 API 下载的 .p12 证书 (假设密码为空)
+                  P12_PATH=$(ls ~/Library/Developer/Xcode/UserData/Certificates/*.p12 2>/dev/null | head -1)
+                  if [ -f "$P12_PATH" ]; then
+                      echo "Importing certificate from: $P12_PATH"
+                      security import "$P12_PATH" -k ~/Library/Keychains/login.keychain-db -P "" -T /usr/bin/codesign
+                  else
+                      echo "⚠️ No .p12 file found, relying on keychain add-certificates"
+                      keychain add-certificates
+                  fi
+                  
+                  # 设置钥匙串分区列表 (解决 errSecInternalComponent)
+                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+                  
+                  echo "=== Available identities ==="
+                  security find-identity -v -p apple
+                  
+            - name: Apply provisioning profile and configure project
+              script: |
+                  echo "=== Installing provisioning profile ==="
+                  xcode-project use-profiles
+                  
+                  # 获取实际安装的描述文件名称
+                  PROFILE_NAME=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print Name' /dev/stdin 2>/dev/null")
+                  echo "Installed provisioning profile: $PROFILE_NAME"
+                  
+                  # 直接将团队 ID 和描述文件名称写入项目文件
+                  cd ios/App
+                  /usr/libexec/PlistBuddy -c "Set :objects:???:buildSettings:DEVELOPMENT_TEAM ${TEAM_ID}" App.xcodeproj/project.pbxproj 2>/dev/null || true
+                  /usr/libexec/PlistBuddy -c "Set :objects:???:buildSettings:CODE_SIGN_STYLE Manual" App.xcodeproj/project.pbxproj 2>/dev/null || true
+                  /usr/libexec/PlistBuddy -c "Set :objects:???:buildSettings:PROVISIONING_PROFILE_SPECIFIER \"$PROFILE_NAME\"" App.xcodeproj/project.pbxproj 2>/dev/null || true
+                  
             - name: Archive
               script: |
                   set -o pipefail
+                  echo "=== Starting Archive ==="
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
                     -archivePath "build/App.xcarchive" \
                     -destination 'generic/platform=iOS' \
-                    DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Manual \
-                    PROVISIONING_PROFILE_SPECIFIER="AIVANA PTE. LTD." \
+                    -allowProvisioningUpdates \
+                    -verbose \
                     2>&1 | tee build.log
                   
             - name: Export IPA
               script: |
+                  echo "=== Starting Export ==="
+                  # 获取 profile UUID 用于 exportOptionsPlist
+                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' /dev/stdin 2>/dev/null")
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -48,7 +96,7 @@ workflows:
                       <key>provisioningProfiles</key>
                       <dict>
                           <key>com.lingumate.app</key>
-                          <string>AIVANA PTE. LTD.</string>
+                          <string>${PROFILE_UUID}</string>
                       </dict>
                   </dict>
                   </plist>
@@ -59,6 +107,7 @@ workflows:
                       -archivePath "build/App.xcarchive" \
                       -exportPath "build/" \
                       -exportOptionsPlist exportOptions.plist \
+                      -allowProvisioningUpdates \
                       2>&1 | tee export.log
                   else
                     echo "Archive failed, skipping export"
