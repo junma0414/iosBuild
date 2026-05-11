@@ -31,7 +31,29 @@ workflows:
                     --create \
                     --platform IOS
                   
-            - name: Apply provisioning profile and setup keychain
+            - name: Import certificates to keychain
+              script: |
+                  echo "=== Importing certificates to keychain ==="
+                  # 解锁默认钥匙串
+                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  
+                  # 查找并导入所有 p12 证书
+                  if [ -d "$HOME/Library/Developer/Xcode/UserData/Certificates" ]; then
+                    for cert in ~/Library/Developer/Xcode/UserData/Certificates/*.p12; do
+                      if [ -f "$cert" ]; then
+                        echo "Importing $cert"
+                        security import "$cert" -k ~/Library/Keychains/login.keychain-db -P "" -T /usr/bin/codesign
+                      fi
+                    done
+                  fi
+                  
+                  # 设置钥匙串分区列表（解决访问权限）
+                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+                  
+                  echo "=== Available certificates ==="
+                  security find-identity -v -p apple
+                  
+            - name: Apply provisioning profile
               script: |
                   echo "=== Applying provisioning profiles ==="
                   xcode-project use-profiles
