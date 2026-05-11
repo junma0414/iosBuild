@@ -23,41 +23,18 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Fetch signing files
-              script: |
-                  app-store-connect fetch-signing-files "com.lingumate.app" \
-                    --type IOS_APP_STORE \
-                    --create \
-                    --platform IOS
-                  
             - name: Setup keychain
               script: |
+                  # 将上传的证书添加到钥匙串
                   keychain add-certificates
+                  # 解锁钥匙串
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  # 设置钥匙串权限（解决 errSecInternalComponent）
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  xcode-project use-profiles
-                  
-            - name: Set manual signing in project
-              script: |
-                  cd ios/App
-                  # 强制设置为手动签名
-                  sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' App.xcodeproj/project.pbxproj
-                  # 设置团队 ID
-                  sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
-                  echo "Set manual signing with team ${TEAM_ID}"
                   
             - name: Build IPA
               script: |
-                  # 获取描述文件 UUID
-                  PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-                  if [ -z "$PROFILE_PATH" ]; then
-                    echo "ERROR: No provisioning profile found!"
-                    exit 1
-                  fi
-                  PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" 2>/dev/null)
-                  echo "Using profile UUID: $PROFILE_UUID"
-                  
-                  # 创建 exportOptions.plist
+                  # 导出选项
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -67,11 +44,6 @@ workflows:
                       <string>app-store</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
-                      <key>provisioningProfiles</key>
-                      <dict>
-                          <key>com.lingumate.app</key>
-                          <string>${PROFILE_UUID}</string>
-                      </dict>
                   </dict>
                   </plist>
                   EOF
@@ -81,23 +53,20 @@ workflows:
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" || true
                   
-                  # 归档 - 移除 -allowProvisioningUpdates
+                  # 归档
                   xcodebuild archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
                     -archivePath "build/App.xcarchive" \
-                    -destination 'generic/platform=iOS'
+                    -destination 'generic/platform=iOS' \
+                    -allowProvisioningUpdates
                   
-                  if [ ! -d "build/App.xcarchive" ]; then
-                    echo "Archive failed!"
-                    exit 1
-                  fi
-                  
-                  # 导出 IPA - 移除 -allowProvisioningUpdates
+                  # 导出 IPA
                   xcodebuild -exportArchive \
                     -archivePath "build/App.xcarchive" \
                     -exportPath "build/" \
-                    -exportOptionsPlist exportOptions.plist
+                    -exportOptionsPlist exportOptions.plist \
+                    -allowProvisioningUpdates
                     
         artifacts:
             - build/*.ipa
