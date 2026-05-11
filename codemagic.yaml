@@ -21,7 +21,11 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            # 删除 Setup keychain 步骤
+            - name: Setup keychain
+              script: |
+                  keychain add-certificates
+                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
                   
             - name: Apply provisioning profile
               script: |
@@ -37,20 +41,11 @@ workflows:
                     -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Manual
+                    CODE_SIGN_STYLE=Manual \
+                    PROVISIONING_PROFILE_SPECIFIER="AIVANA_codemagic"
                   
             - name: Export IPA
               script: |
-                  PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-                  if [ -z "$PROFILE_PATH" ]; then
-                    echo "ERROR: No provisioning profile found!"
-                    exit 1
-                  fi
-                  
-                  PROFILE_NAME=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
-                  
-                  echo "Using Provisioning Profile: $PROFILE_NAME"
-                  
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -63,17 +58,22 @@ workflows:
                       <key>provisioningProfiles</key>
                       <dict>
                           <key>com.lingumate.app</key>
-                          <string>${PROFILE_NAME}</string>
+                          <string>AIVANA_codemagic</string>
                       </dict>
                   </dict>
                   </plist>
                   EOF
                   
-                  xcodebuild -exportArchive \
-                    -archivePath "build/App.xcarchive" \
-                    -exportPath "build/" \
-                    -exportOptionsPlist exportOptions.plist \
-                    -allowProvisioningUpdates
+                  if [ -d "build/App.xcarchive" ]; then
+                    xcodebuild -exportArchive \
+                      -archivePath "build/App.xcarchive" \
+                      -exportPath "build/" \
+                      -exportOptionsPlist exportOptions.plist \
+                      -allowProvisioningUpdates
+                  else
+                    echo "Archive failed, skipping export"
+                    exit 1
+                  fi
                   
         artifacts:
             - build/*.ipa
