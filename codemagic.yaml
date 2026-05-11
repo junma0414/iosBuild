@@ -32,6 +32,7 @@ workflows:
                     -allowProvisioningUpdates \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
                     CODE_SIGN_STYLE=Manual \
+                    PROVISIONING_PROFILE_SPECIFIER="linguamate_distribution_provision" \
                     2>&1 | tee build.log
                   
             - name: Export IPA
@@ -45,6 +46,11 @@ workflows:
                       <string>app-store-connect</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
+                      <key>provisioningProfiles</key>
+                      <dict>
+                          <key>com.lingumate.app</key>
+                          <string>linguamate_distribution_provision</string>
+                      </dict>
                   </dict>
                   </plist>
                   EOF
@@ -59,8 +65,6 @@ workflows:
         artifacts:
             - build/*.ipa
             - build/App.xcarchive
-            - build.log
-            - export.log
             
         publishing:
             app_store_connect:
