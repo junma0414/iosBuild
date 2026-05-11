@@ -21,51 +21,14 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Fetch signing files via API
-              script: |
-                  echo "=== Fetch signing files ==="
-                  app-store-connect fetch-signing-files "com.lingumate.app" \
-                    --type IOS_APP_STORE \
-                    --create \
-                    --platform IOS
-                  
-            - name: Setup keychain (stable version)
+            - name: Setup keychain
               script: |
                   echo "=== Setup keychain ==="
                   keychain add-certificates
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  echo "=== Certificates in keychain ==="
-                  security find-identity -v -p apple || echo "No certificates found"
                   
-            - name: Debug - List provisioning profiles
-              script: |
-                  echo "=== Provisioning profiles directory ==="
-                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "Directory does not exist"
-                  echo ""
-                  echo "=== Extracting profile names ==="
-                  PROFILES_DIR="$HOME/Library/MobileDevice/Provisioning Profiles"
-                  if [ -d "$PROFILES_DIR" ]; then
-                    for profile in "$PROFILES_DIR"/*.mobileprovision; do
-                      if [ -f "$profile" ]; then
-                        echo "File: $(basename "$profile")"
-                        NAME=$(security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
-                        UUID=$(security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
-                        echo "  Name: $NAME"
-                        echo "  UUID: $UUID"
-                        echo ""
-                      fi
-                    done
-                  else
-                    echo "Provisioning profiles directory not found!"
-                  fi
-                  
-            - name: Apply profile to project
-              script: |
-                  echo "=== Applying profile with xcode-project ==="
-                  xcode-project use-profiles
-                  
-            - name: Archive with automatic signing
+            - name: Archive with manual signing
               script: |
                   set -o pipefail
                   echo "=== Starting Archive ==="
@@ -74,9 +37,9 @@ workflows:
                     -scheme "App" \
                     -archivePath "build/App.xcarchive" \
                     -destination 'generic/platform=iOS' \
-                    -allowProvisioningUpdates \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Automatic \
+                    CODE_SIGN_STYLE=Manual \
+                    PROVISIONING_PROFILE_SPECIFIER="AIVANA PTE. LTD." \
                     2>&1 | tee build.log
                   
             - name: Export IPA
@@ -90,6 +53,11 @@ workflows:
                       <string>app-store-connect</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
+                      <key>provisioningProfiles</key>
+                      <dict>
+                          <key>com.lingumate.app</key>
+                          <string>AIVANA PTE. LTD.</string>
+                      </dict>
                   </dict>
                   </plist>
                   EOF
@@ -99,7 +67,6 @@ workflows:
                       -archivePath "build/App.xcarchive" \
                       -exportPath "build/" \
                       -exportOptionsPlist exportOptions.plist \
-                      -allowProvisioningUpdates \
                       2>&1 | tee export.log
                   else
                     echo "Archive failed, skipping export"
