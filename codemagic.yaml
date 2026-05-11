@@ -21,16 +21,71 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
-            - name: Build IPA with xcode-project
+            - name: Debug - Check environment
               script: |
-                  xcode-project build-ipa \
-                    --project "ios/App/App.xcodeproj" \
-                    --scheme "App" \
-                    --archive-flags "-destination 'generic/platform/iOS'" \
-                    --export-method app-store
+                  echo "=== Xcode version ==="
+                  xcodebuild -version
+                  echo "=== Available schemes ==="
+                  xcodebuild -project ios/App/App.xcodeproj -list
+                  echo "=== Check signing certificates ==="
+                  security find-identity -v -p apple
+                  echo "=== Check provisioning profiles ==="
+                  ls -la ~/Library/MobileDevice/Provisioning\ Profiles/ 2>/dev/null || echo "No profiles found"
+                  
+            - name: Clean build
+              script: |
+                  xcodebuild clean \
+                    -project "ios/App/App.xcodeproj" \
+                    -scheme "App" 2>&1
+                  
+            - name: Archive (with full logging)
+              script: |
+                  set -o pipefail
+                  xcodebuild archive \
+                    -project "ios/App/App.xcodeproj" \
+                    -scheme "App" \
+                    -archivePath "build/App.xcarchive" \
+                    -destination 'generic/platform=iOS' \
+                    -allowProvisioningUpdates \
+                    CODE_SIGN_STYLE=Manual \
+                    PROVISIONING_PROFILE_SPECIFIER="APP ID for lingumate ios_app_store 1778428934" \
+                    2>&1 | tee xcodebuild.log
+                  
+                  echo "=== Archive exit code: $? ==="
+                  ls -la build/ 2>/dev/null || echo "No build directory"
+                  
+            - name: Export IPA
+              script: |
+                  if [ ! -d "build/App.xcarchive" ]; then
+                    echo "Archive not found, skipping export"
+                    exit 1
+                  fi
+                  
+                  cat > exportOptions.plist <<EOF
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                  <plist version="1.0">
+                  <dict>
+                      <key>method</key>
+                      <string>app-store</string>
+                      <key>teamID</key>
+                      <string>${TEAM_ID}</string>
+                  </dict>
+                  </plist>
+                  EOF
+                  
+                  xcodebuild -exportArchive \
+                    -archivePath "build/App.xcarchive" \
+                    -exportPath "build/" \
+                    -exportOptionsPlist exportOptions.plist \
+                    -allowProvisioningUpdates 2>&1 | tee export.log
                     
         artifacts:
-            - build/ios/ipa/*.ipa
+            - build/*.ipa
+            - build/*.xcarchive
+            - xcodebuild.log
+            - export.log
+            - /tmp/xcodebuild_logs/*.log
             
         publishing:
             app_store_connect:
