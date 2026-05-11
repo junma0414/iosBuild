@@ -17,120 +17,35 @@ workflows:
               script: |
                   npm run build
                   
-            - name: Regenerate iOS project
+            - name: Generate iOS project
               script: |
                   rm -rf ios
                   npx cap add ios
                   npx cap sync ios
-                  rm -f ios/App/Podfile || true
-                  rm -f ios/App/Podfile.lock || true
                   
-            - name: Set up Manual Signing in project
+            - name: Build ipa with automatic signing
               script: |
-                  cd ios/App
-                  cp App.xcodeproj/project.pbxproj App.xcodeproj/project.pbxproj.backup
-                  
-                  # 强制设置为手动签名
-                  sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' App.xcodeproj/project.pbxproj
-                  sed -i '' 's/CODE_SIGN_STYLE = ".*";/CODE_SIGN_STYLE = Manual;/g' App.xcodeproj/project.pbxproj
-                  
-                  # 清除所有旧的描述文件引用
-                  sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' App.xcodeproj/project.pbxproj
-                  sed -i '' '/PROVISIONING_PROFILE/d' App.xcodeproj/project.pbxproj
-                  
-                  echo "Switched to Manual signing style in project.pbxproj"
-                  
-            - name: Fetch iOS signing files
-              script: |
-                  app-store-connect fetch-signing-files "com.lingumate.app" \
-                    --type IOS_APP_STORE \
-                    --create \
-                    --platform IOS
-                    
-            - name: Setup keychain and signing
-              script: |
-                  keychain add-certificates
-                  
-                  # 强化钥匙串权限设置
-                  security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
-                  
-                  # 设置钥匙串分区列表（关键修复）
-                  security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
-                  
-                  # 设置钥匙串为默认并延长锁定时间
-                  security default-keychain -s ~/Library/Keychains/login.keychain-db
-                  security set-keychain-settings -lut 7200 ~/Library/Keychains/login.keychain-db
-                  
-                  # 列出钥匙串中的证书（调试用）
-                  security find-identity -v -p apple
-                  
-                  xcode-project use-profiles
-                  
-            - name: Build ipa
-              script: |
-                  PROJECT_PATH="ios/App/App.xcodeproj"
-                  SCHEME="App"
-                  ARCHIVE_PATH="build/App.xcarchive"
-                  EXPORT_PATH="build"
-                  
-                  # 创建 exportOptions.plist
-                  cat > exportOptions.plist <<EOF
-                  <?xml version="1.0" encoding="UTF-8"?>
-                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-                  <plist version="1.0">
-                  <dict>
-                      <key>method</key>
-                      <string>app-store</string>
-                      <key>teamID</key>
-                      <string>${TEAM_ID}</string>
-                      <key>signingStyle</key>
-                      <string>manual</string>
-                      <key>manageAppVersionAndBuildNumber</key>
-                      <true/>
-                      <key>provisioningProfiles</key>
-                      <dict>
-                          <key>com.lingumate.app</key>
-                          <string>APP ID for lingumate ios_app_store 1778428934</string>
-                      </dict>
-                  </dict>
-                  </plist>
-                  EOF
-                  
                   xcodebuild clean \
-                    -project "$PROJECT_PATH" \
-                    -scheme "$SCHEME" \
-                    -allowProvisioningUpdates || true
-                  
-                  # 尝试先编译，排除签名问题
-                  xcodebuild build \
-                    -project "$PROJECT_PATH" \
-                    -scheme "$SCHEME" \
-                    -destination 'generic/platform=iOS' \
+                    -project "ios/App/App.xcodeproj" \
+                    -scheme "App" \
                     -allowProvisioningUpdates || true
                   
                   xcodebuild archive \
-                    -project "$PROJECT_PATH" \
-                    -scheme "$SCHEME" \
-                    -archivePath "$ARCHIVE_PATH" \
+                    -project "ios/App/App.xcodeproj" \
+                    -scheme "App" \
+                    -archivePath "build/App.xcarchive" \
                     -allowProvisioningUpdates \
                     -destination 'generic/platform=iOS'
                   
-                  if [ ! -d "$ARCHIVE_PATH" ]; then
-                    echo "Archive failed!"
-                    exit 1
-                  fi
-                  
                   xcodebuild -exportArchive \
-                    -archivePath "$ARCHIVE_PATH" \
-                    -exportPath "$EXPORT_PATH" \
-                    -exportOptionsPlist exportOptions.plist \
+                    -archivePath "build/App.xcarchive" \
+                    -exportPath "build/" \
+                    -exportOptionsPlist <(echo '{"method": "app-store", "teamID": "'$TEAM_ID'"}') \
                     -allowProvisioningUpdates
                     
         artifacts:
             - build/*.ipa
             - build/*.xcarchive
-            - /tmp/xcodebuild_logs/*.log
-            - exportOptions.plist
             
         publishing:
             app_store_connect:
