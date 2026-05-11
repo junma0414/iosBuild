@@ -90,7 +90,21 @@ workflows:
                   # 使用 xcode-project use-profiles 自动配置
                   xcode-project use-profiles
 
-            # 7. 构建 ipa（自动签名）
+            # 7. 先尝试编译，查看具体错误
+            - name: Try to build and show errors
+              script: |
+                  cd ios/App
+                  
+                  # 尝试编译，显示详细错误
+                  xcodebuild build \
+                    -project App.xcodeproj \
+                    -scheme App \
+                    -destination 'generic/platform=iOS' \
+                    -allowProvisioningUpdates \
+                    CODE_SIGN_STYLE=Automatic \
+                    DEVELOPMENT_TEAM=${TEAM_ID} 2>&1 || true
+
+            # 8. 构建 ipa（自动签名）
             - name: Build ipa with automatic signing
               script: |
                   # 设置项目路径
@@ -121,7 +135,8 @@ workflows:
                     -scheme "$SCHEME" \
                     -allowProvisioningUpdates || true
                   
-                  # 归档（Archive）- 使用自动签名
+                  # 归档（Archive）- 使用自动签名，输出详细日志
+                  echo "Starting archive..."
                   xcodebuild archive \
                     -project "$PROJECT_PATH" \
                     -scheme "$SCHEME" \
@@ -129,8 +144,16 @@ workflows:
                     -allowProvisioningUpdates \
                     -destination 'generic/platform=iOS' \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Automatic
+                    CODE_SIGN_STYLE=Automatic \
+                    -verbose 2>&1 | tee xcodebuild.log
                   
+                  # 检查归档是否成功
+                  if [ ! -d "$ARCHIVE_PATH" ]; then
+                    echo "Archive failed! Check logs above."
+                    exit 1
+                  fi
+                  
+                  echo "Archive successful, exporting IPA..."
                   # 从归档导出 IPA
                   xcodebuild -exportArchive \
                     -archivePath "$ARCHIVE_PATH" \
@@ -144,6 +167,7 @@ workflows:
             - build/*.xcarchive
             - /tmp/xcodebuild_logs/*.log
             - exportOptions.plist
+            - ios/App/xcodebuild.log
 
         # 配置构建产物的发布选项
         publishing:
