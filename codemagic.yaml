@@ -33,22 +33,36 @@ workflows:
             - name: Setup keychain
               script: |
                   keychain add-certificates
+                  # 解锁并设置权限，防止 errSecInternalComponent 错误
                   security unlock-keychain -p builder ~/Library/Keychains/login.keychain-db
+                  security set-keychain-settings -lut 7200 ~/Library/Keychains/login.keychain-db
                   security set-key-partition-list -S apple-tool:,apple: -s -k builder ~/Library/Keychains/login.keychain-db
+                  
+                  # 应用描述文件到项目
                   xcode-project use-profiles
                   
             - name: Set manual signing in project
               script: |
                   cd ios/App
-                  # 强制设置为手动签名
+                  # 备份
+                  cp App.xcodeproj/project.pbxproj App.xcodeproj/project.pbxproj.backup
+                  
+                  # 强制设置为手动签名并指定 Team ID
                   sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' App.xcodeproj/project.pbxproj
                   sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
                   
+                  # 清除可能冲突的描述文件配置，让 xcode-project use-profiles 的设置生效
+                  sed -i '' '/PROVISIONING_PROFILE/d' App.xcodeproj/project.pbxproj
+                  
+                  echo "Manual signing and Team ID configured."
+                  
             - name: Build IPA
               script: |
-                  # 获取描述文件 UUID
-                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' 2>/dev/null")
+                  # 获取描述文件 UUID (确保路径正确)
+                  PROFILE_UUID=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -1 | xargs -I {} sh -c "security cms -D -i '{}' 2>/dev/null | /usr/libexec/PlistBuddy -c 'Print UUID' 2>/dev/null")
+                  echo "Using Profile UUID: $PROFILE_UUID"
                   
+                  # 创建 exportOptions.plist
                   cat > exportOptions.plist <<EOF
                   <?xml version="1.0" encoding="UTF-8"?>
                   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -58,27 +72,36 @@ workflows:
                       <string>app-store</string>
                       <key>teamID</key>
                       <string>${TEAM_ID}</string>
+                      <key>signingStyle</key>
+                      <string>manual</string>
                       <key>provisioningProfiles</key>
                       <dict>
                           <key>com.lingumate.app</key>
                           <string>${PROFILE_UUID}</string>
                       </dict>
+                      <key>manageAppVersionAndBuildNumber</key>
+                      <true/>
                   </dict>
                   </plist>
                   EOF
                   
-                  xcodebuild clean \
-                    -project "ios/App/App.xcodeproj" \
-                    -scheme "App" \
-                    -allowProvisioningUpdates || true
-                  
-                  xcodebuild archive \
+                  # 清理并归档
+                  # 注意：不要在命令行强制 CODE_SIGN_STYLE=Automatic ，这会覆盖项目设置
+                  xcodebuild clean archive \
                     -project "ios/App/App.xcodeproj" \
                     -scheme "App" \
                     -archivePath "build/App.xcarchive" \
+                    -destination 'generic/platform=iOS' \
                     -allowProvisioningUpdates \
-                    -destination 'generic/platform=iOS'
+                    DEVELOPMENT_TEAM=${TEAM_ID}
                   
+                  # 检查归档
+                  if [ ! -d "build/App.xcarchive" ]; then
+                    echo "Archive failed!"
+                    exit 1
+                  fi
+                  
+                  # 导出 IPA
                   xcodebuild -exportArchive \
                     -archivePath "build/App.xcarchive" \
                     -exportPath "build/" \
