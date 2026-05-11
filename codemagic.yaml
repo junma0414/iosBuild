@@ -43,7 +43,29 @@ workflows:
                   rm -f ios/App/Podfile || true
                   rm -f ios/App/Podfile.lock || true
 
-            # 4. 获取 iOS 签名文件（自动创建证书和描述文件）
+            # 4. 清理 project.pbxproj 中的所有手动签名配置
+            - name: Remove all manual signing settings from project
+              script: |
+                  cd ios/App
+                  
+                  # 备份原文件
+                  cp App.xcodeproj/project.pbxproj App.xcodeproj/project.pbxproj.backup
+                  
+                  # 删除所有 PROVISIONING_PROFILE_SPECIFIER 行
+                  sed -i '' '/PROVISIONING_PROFILE_SPECIFIER/d' App.xcodeproj/project.pbxproj
+                  
+                  # 删除所有 PROVISIONING_PROFILE 行
+                  sed -i '' '/PROVISIONING_PROFILE/d' App.xcodeproj/project.pbxproj
+                  
+                  # 将 CODE_SIGN_STYLE 设置为 Automatic
+                  sed -i '' 's/CODE_SIGN_STYLE = ".*";/CODE_SIGN_STYLE = Automatic;/g' App.xcodeproj/project.pbxproj
+                  
+                  # 删除可能存在的 DEVELOPMENT_TEAM 旧值（稍后会通过命令行重新设置）
+                  sed -i '' '/DEVELOPMENT_TEAM/d' App.xcodeproj/project.pbxproj
+                  
+                  echo "Manual signing settings removed from project.pbxproj"
+
+            # 5. 获取 iOS 签名文件（自动创建证书和描述文件）
             - name: Fetch iOS signing files
               script: |
                   app-store-connect fetch-signing-files "com.lingumate.app" \
@@ -51,35 +73,8 @@ workflows:
                     --create \
                     --platform IOS
 
-            # 5. 清理项目中的手动签名配置
-            - name: Clean manual signing settings from project
-              script: |
-                  cd ios/App
-                  
-                  # 使用 ruby 脚本清除手动签名设置
-                  ruby -e "
-                    require 'xcodeproj'
-                    project_path = 'App.xcodeproj'
-                    project = Xcodeproj::Project.open(project_path)
-                    project.targets.each do |target|
-                      if target.name == 'App'
-                        target.build_configurations.each do |config|
-                          # 清除手动指定的描述文件
-                          config.build_settings.delete('PROVISIONING_PROFILE_SPECIFIER')
-                          config.build_settings.delete('PROVISIONING_PROFILE')
-                          # 设置为自动签名
-                          config.build_settings['CODE_SIGN_STYLE'] = 'Automatic'
-                          config.build_settings['DEVELOPMENT_TEAM'] = '${TEAM_ID}'
-                        end
-                      end
-                    end
-                    project.save
-                  " || echo "Ruby cleanup completed"
-                  
-                  echo "Manual signing settings cleaned"
-
-            # 6. 设置自动签名
-            - name: Setup automatic signing
+            # 6. 设置钥匙串和签名
+            - name: Setup keychain and signing
               script: |
                   # 设置钥匙串
                   keychain add-certificates
@@ -90,21 +85,7 @@ workflows:
                   # 使用 xcode-project use-profiles 自动配置
                   xcode-project use-profiles
 
-            # 7. 先尝试编译，查看具体错误
-            - name: Try to build and show errors
-              script: |
-                  cd ios/App
-                  
-                  # 尝试编译，显示详细错误
-                  xcodebuild build \
-                    -project App.xcodeproj \
-                    -scheme App \
-                    -destination 'generic/platform=iOS' \
-                    -allowProvisioningUpdates \
-                    CODE_SIGN_STYLE=Automatic \
-                    DEVELOPMENT_TEAM=${TEAM_ID} 2>&1 || true
-
-            # 8. 构建 ipa（自动签名）
+            # 7. 构建 ipa（自动签名）
             - name: Build ipa with automatic signing
               script: |
                   # 设置项目路径
@@ -135,8 +116,7 @@ workflows:
                     -scheme "$SCHEME" \
                     -allowProvisioningUpdates || true
                   
-                  # 归档（Archive）- 使用自动签名，输出详细日志
-                  echo "Starting archive..."
+                  # 归档（Archive）- 使用自动签名
                   xcodebuild archive \
                     -project "$PROJECT_PATH" \
                     -scheme "$SCHEME" \
@@ -144,16 +124,14 @@ workflows:
                     -allowProvisioningUpdates \
                     -destination 'generic/platform=iOS' \
                     DEVELOPMENT_TEAM=${TEAM_ID} \
-                    CODE_SIGN_STYLE=Automatic \
-                    -verbose 2>&1 | tee xcodebuild.log
+                    CODE_SIGN_STYLE=Automatic
                   
                   # 检查归档是否成功
                   if [ ! -d "$ARCHIVE_PATH" ]; then
-                    echo "Archive failed! Check logs above."
+                    echo "Archive failed!"
                     exit 1
                   fi
                   
-                  echo "Archive successful, exporting IPA..."
                   # 从归档导出 IPA
                   xcodebuild -exportArchive \
                     -archivePath "$ARCHIVE_PATH" \
@@ -167,7 +145,6 @@ workflows:
             - build/*.xcarchive
             - /tmp/xcodebuild_logs/*.log
             - exportOptions.plist
-            - ios/App/xcodebuild.log
 
         # 配置构建产物的发布选项
         publishing:
