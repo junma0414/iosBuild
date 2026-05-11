@@ -23,29 +23,71 @@ workflows:
                   npx cap add ios
                   npx cap sync ios
                   
+            - name: Set development team in Xcode project
+              script: |
+                  cd ios/App
+                  
+                  # 使用 sed 命令直接设置 DEVELOPMENT_TEAM
+                  sed -i '' "s/DEVELOPMENT_TEAM = .*/DEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
+                  
+                  # 如果没有 DEVELOPMENT_TEAM 行，则添加
+                  grep -q "DEVELOPMENT_TEAM" App.xcodeproj/project.pbxproj || \
+                  sed -i '' "s/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Automatic;\n\t\t\t\tDEVELOPMENT_TEAM = ${TEAM_ID};/g" App.xcodeproj/project.pbxproj
+                  
+                  echo "Set DEVELOPMENT_TEAM to ${TEAM_ID} in project.pbxproj"
+                  
             - name: Build ipa with automatic signing
               script: |
+                  PROJECT_PATH="ios/App/App.xcodeproj"
+                  SCHEME="App"
+                  ARCHIVE_PATH="build/App.xcarchive"
+                  EXPORT_PATH="build"
+                  
+                  # 创建 exportOptions.plist 文件
+                  cat > exportOptions.plist <<EOF
+                  <?xml version="1.0" encoding="UTF-8"?>
+                  <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+                  <plist version="1.0">
+                  <dict>
+                      <key>method</key>
+                      <string>app-store</string>
+                      <key>teamID</key>
+                      <string>${TEAM_ID}</string>
+                  </dict>
+                  </plist>
+                  EOF
+                  
+                  # 清理之前的构建
                   xcodebuild clean \
-                    -project "ios/App/App.xcodeproj" \
-                    -scheme "App" \
+                    -project "$PROJECT_PATH" \
+                    -scheme "$SCHEME" \
                     -allowProvisioningUpdates || true
                   
+                  # 归档（Archive）
                   xcodebuild archive \
-                    -project "ios/App/App.xcodeproj" \
-                    -scheme "App" \
-                    -archivePath "build/App.xcarchive" \
+                    -project "$PROJECT_PATH" \
+                    -scheme "$SCHEME" \
+                    -archivePath "$ARCHIVE_PATH" \
                     -allowProvisioningUpdates \
-                    -destination 'generic/platform=iOS'
+                    -destination 'generic/platform=iOS' \
+                    DEVELOPMENT_TEAM=${TEAM_ID}
                   
+                  if [ ! -d "$ARCHIVE_PATH" ]; then
+                    echo "Archive failed!"
+                    exit 1
+                  fi
+                  
+                  # 从归档导出 IPA
                   xcodebuild -exportArchive \
-                    -archivePath "build/App.xcarchive" \
-                    -exportPath "build/" \
-                    -exportOptionsPlist <(echo '{"method": "app-store", "teamID": "'$TEAM_ID'"}') \
+                    -archivePath "$ARCHIVE_PATH" \
+                    -exportPath "$EXPORT_PATH" \
+                    -exportOptionsPlist exportOptions.plist \
                     -allowProvisioningUpdates
                     
         artifacts:
             - build/*.ipa
             - build/*.xcarchive
+            - exportOptions.plist
             
         publishing:
             app_store_connect:
