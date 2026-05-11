@@ -5,6 +5,9 @@ workflows:
     instance_type: mac_mini_m2
     max_build_duration: 60
 
+    integrations:
+      app_store_connect: Codemagic
+
     environment:
       groups:
         - ios_credentials
@@ -13,16 +16,16 @@ workflows:
         XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
         BUNDLE_ID: "com.lingumate.app"
-        APP_STORE_APPLE_ID: ""
 
       node: latest
       xcode: latest
 
+    ios_signing:
       certificates:
-        - certificate: linguamate_distribution_cert
+        - linguamate_distribution_cert
 
       provisioning_profiles:
-        - profile: linguamate_distribution_provision
+        - linguamate_distribution_provision
 
     scripts:
       ######################################################################
@@ -55,7 +58,7 @@ workflows:
           pod install
 
       ######################################################################
-      # Show signing info (debugging)
+      # Show signing identities
       ######################################################################
       - name: Show signing identities
         script: |
@@ -64,7 +67,7 @@ workflows:
       ######################################################################
       # Archive app
       ######################################################################
-      - name: Build IPA Archive
+      - name: Archive iOS app
         script: |
           set -e
           set -o pipefail
@@ -79,7 +82,7 @@ workflows:
             PROVISIONING_PROFILE_SPECIFIER="AIVANA_codemagic"
 
       ######################################################################
-      # Create export options
+      # Export options plist
       ######################################################################
       - name: Create ExportOptions.plist
         script: |
@@ -104,18 +107,6 @@ workflows:
                   <key>com.lingumate.app</key>
                   <string>AIVANA_codemagic</string>
               </dict>
-
-              <key>stripSwiftSymbols</key>
-              <true/>
-
-              <key>compileBitcode</key>
-              <false/>
-
-              <key>destination</key>
-              <string>export</string>
-
-              <key>manageAppVersionAndBuildNumber</key>
-              <false/>
 
           </dict>
           </plist>
@@ -142,23 +133,18 @@ workflows:
           echo "=== IPA FILES ==="
           find $CM_BUILD_DIR/build -name "*.ipa"
 
-          echo "=== ARCHIVES ==="
-          find $CM_BUILD_DIR/build -name "*.xcarchive"
-
     ########################################################################
     # Artifacts
     ########################################################################
     artifacts:
       - build/ios/ipa/*.ipa
       - build/App.xcarchive
-      - /tmp/xcodebuild_logs/*.log
 
     ########################################################################
     # Publishing
     ########################################################################
     publishing:
       app_store_connect:
-        auth: integration
         submit_to_testflight: true
 
       email:
