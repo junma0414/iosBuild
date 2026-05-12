@@ -64,19 +64,32 @@ workflows:
             -destination 'generic/platform=iOS' \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
 
-      - name: Create ExportOptions.plist
+      - name: Prepare export options
         script: |
-          cat > "$CM_BUILD_DIR/exportOptions.plist" <<EOF
+          # 获取已安装的描述文件的 UUID 和名称
+          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -1)
+          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
+          PROFILE_NAME=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
+          echo "Using profile UUID: $PROFILE_UUID"
+          
+          cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>app-store</string>
+              <string>app-store-connect</string>
               <key>teamID</key>
               <string>${TEAM_ID}</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>${BUNDLE_ID}</key>
+                  <string>${PROFILE_UUID}</string>
+              </dict>
               <key>signingStyle</key>
-              <string>automatic</string>
+              <string>manual</string>
+              <key>stripSwiftSymbols</key>
+              <true/>
           </dict>
           </plist>
           EOF
@@ -89,7 +102,10 @@ workflows:
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
             -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist" \
-            -allowProvisioningUpdates
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$CM_BUILD_DIR/auth_key.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -101,6 +117,7 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+
       email:
         recipients:
           - junma0614@gmail.com
