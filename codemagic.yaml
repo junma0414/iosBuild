@@ -54,6 +54,11 @@ workflows:
           // This file is intentionally empty to satisfy SPM requirements.
           EOF
 
+      - name: Save API key for xcodebuild
+        script: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > $CM_BUILD_DIR/auth_key.p8
+          chmod 600 $CM_BUILD_DIR/auth_key.p8
+
       - name: Archive iOS app
         script: |
           set -e
@@ -64,9 +69,12 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             -destination 'generic/platform=iOS' \
-            -allowProvisioningUpdates \
+            -authenticationKeyPath "$CM_BUILD_DIR/auth_key.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic
+            CODE_SIGN_STYLE=Automatic \
+            -allowProvisioningUpdates
 
       - name: Create ExportOptions.plist
         script: |
