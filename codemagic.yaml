@@ -27,12 +27,15 @@ workflows:
           cp .env.production .env
           NODE_ENV=production npm run build
 
+      # ============================================
+      # 修复 Podfile：正确加载 capacitor_pods
+      # ============================================
       - name: Sync Capacitor iOS
         script: |
           mkdir -p ios/App
-          cat > ios/App/Podfile <<EOF
+          cat > ios/App/Podfile <<'EOF'
+          require File.expand_path('../../node_modules/@capacitor/cli/bin/scripts/podfile_helpers', __FILE__)
           platform :ios, '14.0'
-          
           target 'App' do
             capacitor_pods
           end
