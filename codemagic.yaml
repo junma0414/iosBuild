@@ -19,8 +19,7 @@ workflows:
 
     scripts:
       - name: Install npm dependencies
-        script: |
-          npm ci
+        script: npm ci
 
       - name: Build web assets
         script: |
@@ -33,29 +32,14 @@ workflows:
           npx cap add ios
           npx cap sync ios
 
-      - name: Create SPM placeholder package
+      - name: Resolve SPM dependencies
         script: |
-          mkdir -p ios/App/CapApp-SPM/Sources/CapApp-SPM
-          cat > ios/App/CapApp-SPM/Package.swift <<EOF
-          // swift-tools-version:5.3
-          import PackageDescription
-          let package = Package(
-              name: "CapApp-SPM",
-              products: [
-                  .library(name: "CapApp-SPM", targets: ["CapApp-SPM"])
-              ],
-              targets: [
-                  .target(name: "CapApp-SPM", path: "Sources/CapApp-SPM")
-              ]
-          )
-          EOF
-          cat > ios/App/CapApp-SPM/Sources/CapApp-SPM/Empty.swift <<EOF
-          // Intentionally empty
-          EOF
+          xcodebuild -resolvePackageDependencies \
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
 
       - name: Initialize keychain
-        script: |
-          keychain initialize
+        script: keychain initialize
 
       - name: Fetch signing files
         script: |
@@ -64,18 +48,15 @@ workflows:
             --create
 
       - name: Add certificates to keychain
-        script: |
-          keychain add-certificates
+        script: keychain add-certificates
 
       - name: Configure code signing
-        script: |
-          xcode-project use-profiles
+        script: xcode-project use-profiles
 
       - name: Archive iOS app
         script: |
           set -e
           set -o pipefail
-
           xcodebuild archive \
             -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
@@ -87,7 +68,6 @@ workflows:
         script: |
           set -e
           set -o pipefail
-
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
@@ -103,7 +83,6 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
-
       email:
         recipients:
           - junma0614@gmail.com
