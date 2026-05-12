@@ -28,18 +28,12 @@ workflows:
           NODE_ENV=production npm run build
 
       # ============================================
-      # 修复 Podfile：正确加载 capacitor_pods
+      # 重新生成 iOS 项目，让 Capacitor 自己创建正确的 Podfile
       # ============================================
       - name: Sync Capacitor iOS
         script: |
-          mkdir -p ios/App
-          cat > ios/App/Podfile <<'EOF'
-          require File.expand_path('../../node_modules/@capacitor/cli/bin/scripts/podfile_helpers', __FILE__)
-          platform :ios, '14.0'
-          target 'App' do
-            capacitor_pods
-          end
-          EOF
+          rm -rf ios
+          npx cap add ios
           npx cap sync ios
 
       - name: Create SPM placeholder package
