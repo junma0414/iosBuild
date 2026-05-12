@@ -64,26 +64,11 @@ workflows:
             -destination 'generic/platform=iOS' \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
 
-      - name: Save API key for export
+      - name: Export IPA
         script: |
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > auth_key.p8
-          chmod 600 auth_key.p8
-
-      - name: Prepare export options
-        script: |
-          # 获取描述文件信息
-          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          if [ -z "$PROFILE_PATH" ]; then
-            echo "Error: No provisioning profile found"
-            exit 1
-          fi
-          PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null || echo "")
-          if [ -z "$PROFILE_UUID" ]; then
-            # 如果获取 UUID 失败，使用描述文件名称
-            PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
-          fi
-          echo "Using profile UUID: $PROFILE_UUID"
-          
+          set -e
+          set -o pipefail
+          # 使用最简 exportOptions.plist，让 Xcode 自动选择描述文件
           cat > exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,31 +78,18 @@ workflows:
               <string>app-store-connect</string>
               <key>teamID</key>
               <string>${TEAM_ID}</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>${BUNDLE_ID}</key>
-                  <string>${PROFILE_UUID}</string>
-              </dict>
               <key>signingStyle</key>
-              <string>manual</string>
+              <string>automatic</string>
               <key>stripSwiftSymbols</key>
               <true/>
           </dict>
           </plist>
           EOF
-
-      - name: Export IPA
-        script: |
-          set -e
-          set -o pipefail
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
             -exportOptionsPlist exportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$CM_BUILD_DIR/auth_key.p8" \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+            -allowProvisioningUpdates
 
     artifacts:
       - build/ios/ipa/*.ipa
