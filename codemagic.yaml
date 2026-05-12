@@ -32,7 +32,7 @@ workflows:
           npx cap sync ios
           rm -f ios/App/Podfile
           rm -f ios/App/Podfile.lock
-          mkdir -p ios/App/CapApp-SPM
+          mkdir -p ios/App/CapApp-SPM/Sources/CapApp-SPM
           cat > ios/App/CapApp-SPM/Package.swift <<EOF
           // swift-tools-version:5.3
           import PackageDescription
@@ -40,10 +40,18 @@ workflows:
           let package = Package(
               name: "CapApp-SPM",
               products: [
-                  .library(name: "CapApp-SPM", targets: [])
+                  .library(name: "CapApp-SPM", targets: ["CapApp-SPM"])
               ],
-              targets: []
+              targets: [
+                  .target(
+                      name: "CapApp-SPM",
+                      path: "Sources/CapApp-SPM"
+                  )
+              ]
           )
+          EOF
+          cat > ios/App/CapApp-SPM/Sources/CapApp-SPM/Empty.swift <<EOF
+          // This file is intentionally empty to satisfy SPM requirements.
           EOF
 
       - name: Archive iOS app
