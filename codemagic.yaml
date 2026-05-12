@@ -66,10 +66,8 @@ workflows:
 
       - name: Prepare export options
         script: |
-          # 获取已安装的描述文件的 UUID 和名称
           PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision | head -1)
           PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
-          PROFILE_NAME=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
           echo "Using profile UUID: $PROFILE_UUID"
           
           cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
@@ -93,6 +91,11 @@ workflows:
           </dict>
           </plist>
           EOF
+
+      - name: Save API key to file
+        script: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > $CM_BUILD_DIR/auth_key.p8
+          chmod 600 $CM_BUILD_DIR/auth_key.p8
 
       - name: Export IPA
         script: |
