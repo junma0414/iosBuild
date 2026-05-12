@@ -36,32 +36,57 @@ workflows:
             --type IOS_APP_STORE \
             --create
 
-      - name: Create export options plist
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+
+      - name: Configure code signing
+        script: xcode-project use-profiles
+
+      - name: Archive iOS app
         script: |
+          set -e
+          set -o pipefail
+          xcodebuild archive \
+            -project "ios/App/App.xcodeproj" \
+            -scheme "App" \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
+
+      - name: Save API key for export
+        script: |
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > auth_key.p8
+          chmod 600 auth_key.p8
+
+      - name: Export IPA
+        script: |
+          set -e
+          set -o pipefail
+          # 创建简单有效的 exportOptions.plist
           cat > exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
               <key>method</key>
-              <string>app-store-connect</string>
+              <string>app-store</string>
               <key>teamID</key>
               <string>${TEAM_ID}</string>
-              <key>signingStyle</key>
-              <string>automatic</string>
           </dict>
           </plist>
           EOF
-
-      - name: Build and export IPA
-        script: |
-          xcode-project build-ipa \
-            --project "ios/App/App.xcodeproj" \
-            --scheme "App" \
-            --export-options-plist exportOptions.plist
+          xcodebuild -exportArchive \
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
+            -exportOptionsPlist exportOptions.plist \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$CM_BUILD_DIR/auth_key.p8" \
+            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
 
     artifacts:
       - build/ios/ipa/*.ipa
+      - build/App.xcarchive
 
     publishing:
       app_store_connect:
