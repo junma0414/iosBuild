@@ -10,37 +10,54 @@ workflows:
         - ios_credentials
 
       vars:
-        XCODE_PROJECT: "ios/App/App.xcodeproj"
-        XCODE_SCHEME: "App"
         BUNDLE_ID: "com.lingumate.app"
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
 
       node: latest
       xcode: latest
 
     scripts:
+      # =========================
+      # Install dependencies
+      # =========================
       - name: Install npm dependencies
         script: |
           npm ci
 
-      - name: Build web assets with production env
+      # =========================
+      # Build web assets
+      # =========================
+      - name: Build web assets
         script: |
           cp .env.production .env
           NODE_ENV=production npm run build
 
+      # =========================
+      # Capacitor sync
+      # =========================
       - name: Sync Capacitor iOS
         script: |
           npx cap sync ios
-          rm -f ios/App/Podfile
-          rm -f ios/App/Podfile.lock
+
+      # =========================
+      # Ensure SPM placeholder exists
+      # =========================
+      - name: Create SPM placeholder package
+        script: |
           mkdir -p ios/App/CapApp-SPM/Sources/CapApp-SPM
+
           cat > ios/App/CapApp-SPM/Package.swift <<EOF
           // swift-tools-version:5.3
           import PackageDescription
-          
+
           let package = Package(
               name: "CapApp-SPM",
               products: [
-                  .library(name: "CapApp-SPM", targets: ["CapApp-SPM"])
+                  .library(
+                      name: "CapApp-SPM",
+                      targets: ["CapApp-SPM"]
+                  )
               ],
               targets: [
                   .target(
@@ -50,72 +67,68 @@ workflows:
               ]
           )
           EOF
+
           cat > ios/App/CapApp-SPM/Sources/CapApp-SPM/Empty.swift <<EOF
-          // This file is intentionally empty to satisfy SPM requirements.
+          // Intentionally empty
           EOF
 
-      - name: Fetch signing files via API
+      # =========================
+      # Initialize signing
+      # =========================
+      - name: Initialize keychain
         script: |
-          echo "=== Fetching signing files via API ==="
-          app-store-connect fetch-signing-files "com.lingumate.app" \
-            --type IOS_APP_STORE \
-            --create \
-            --platform IOS
-          
-          echo "=== Installed profiles ==="
-          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
-          
-          # 获取实际的 profile 名称
-          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
-            if [ -f "$profile" ]; then
-              NAME=$(security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
-              echo "Found profile: $NAME"
-              echo "PROFILE_NAME=$NAME" >> $CM_ENV
-            fi
-          done
+          keychain initialize
 
+      # =========================
+      # Fetch provisioning profiles
+      # =========================
+      - name: Fetch signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      # =========================
+      # Install certificates
+      # =========================
+      - name: Add certificates to keychain
+        script: |
+          keychain add-certificates
+
+      # =========================
+      # Apply profiles to Xcode project
+      # =========================
+      - name: Configure code signing
+        script: |
+          xcode-project use-profiles
+
+      # =========================
+      # Resolve Swift packages
+      # =========================
+      - name: Resolve Swift packages
+        script: |
+          xcodebuild -resolvePackageDependencies \
+            -workspace "$XCODE_WORKSPACE" \
+            -scheme "$XCODE_SCHEME"
+
+      # =========================
+      # Build archive
+      # =========================
       - name: Archive iOS app
         script: |
           set -e
           set -o pipefail
-          
-          # 使用 API 下载的 profile 名称
-          PROFILE_NAME=${PROFILE_NAME:-"AIVANA_codemagic"}
-          echo "Using profile: $PROFILE_NAME"
 
           xcodebuild archive \
-            -project "$XCODE_PROJECT" \
+            -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME" \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -configuration Release \
             -destination 'generic/platform=iOS' \
-            DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
 
-      - name: Create ExportOptions.plist
-        script: |
-          PROFILE_NAME=${PROFILE_NAME:-"AIVANA_codemagic"}
-          cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
-          "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store</string>
-              <key>signingStyle</key>
-              <string>manual</string>
-              <key>teamID</key>
-              <string>${TEAM_ID}</string>
-              <key>provisioningProfiles</key>
-              <dict>
-                  <key>com.lingumate.app</key>
-                  <string>${PROFILE_NAME}</string>
-              </dict>
-          </dict>
-          </plist>
-          EOF
-
+      # =========================
+      # Export IPA
+      # =========================
       - name: Export IPA
         script: |
           set -e
@@ -124,7 +137,7 @@ workflows:
           xcodebuild -exportArchive \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            -exportOptionsPlist "$CM_BUILD_DIR/exportOptions.plist"
+            -allowProvisioningUpdates
 
     artifacts:
       - build/ios/ipa/*.ipa
