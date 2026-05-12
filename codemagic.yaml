@@ -39,7 +39,9 @@ workflows:
           
           let package = Package(
               name: "CapApp-SPM",
-              products: [],
+              products: [
+                  .library(name: "CapApp-SPM", targets: [])
+              ],
               targets: []
           )
           EOF
