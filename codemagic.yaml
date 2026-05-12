@@ -18,31 +18,27 @@ workflows:
       xcode: latest
 
     scripts:
-      # =========================
-      # Install dependencies
-      # =========================
       - name: Install npm dependencies
         script: |
           npm ci
 
-      # =========================
-      # Build web assets
-      # =========================
       - name: Build web assets
         script: |
           cp .env.production .env
           NODE_ENV=production npm run build
 
-      # =========================
-      # Capacitor sync
-      # =========================
       - name: Sync Capacitor iOS
         script: |
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          
+          target 'App' do
+            capacitor_pods
+          end
+          EOF
           npx cap sync ios
 
-      # =========================
-      # Ensure SPM placeholder exists
-      # =========================
       - name: Create SPM placeholder package
         script: |
           mkdir -p ios/App/CapApp-SPM/Sources/CapApp-SPM
@@ -72,48 +68,30 @@ workflows:
           // Intentionally empty
           EOF
 
-      # =========================
-      # Initialize signing
-      # =========================
       - name: Initialize keychain
         script: |
           keychain initialize
 
-      # =========================
-      # Fetch provisioning profiles
-      # =========================
       - name: Fetch signing files
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
 
-      # =========================
-      # Install certificates
-      # =========================
       - name: Add certificates to keychain
         script: |
           keychain add-certificates
 
-      # =========================
-      # Apply profiles to Xcode project
-      # =========================
       - name: Configure code signing
         script: |
           xcode-project use-profiles
 
-      # =========================
-      # Resolve Swift packages
-      # =========================
       - name: Resolve Swift packages
         script: |
           xcodebuild -resolvePackageDependencies \
             -workspace "$XCODE_WORKSPACE" \
             -scheme "$XCODE_SCHEME"
 
-      # =========================
-      # Build archive
-      # =========================
       - name: Archive iOS app
         script: |
           set -e
@@ -126,9 +104,6 @@ workflows:
             -destination 'generic/platform=iOS' \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
 
-      # =========================
-      # Export IPA
-      # =========================
       - name: Export IPA
         script: |
           set -e
