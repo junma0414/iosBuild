@@ -11,8 +11,6 @@ workflows:
 
       vars:
         BUNDLE_ID: "com.lingumate.app"
-        XCODE_PROJECT: "ios/App/App.xcodeproj"
-        XCODE_SCHEME: "App"
 
       node: latest
       xcode: latest
@@ -32,68 +30,20 @@ workflows:
           npx cap add ios
           npx cap sync ios
 
-      - name: Resolve SPM dependencies
-        script: |
-          xcodebuild -resolvePackageDependencies \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME"
-
       - name: Fetch signing files
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
 
-      - name: Add certificates to keychain
-        script: keychain add-certificates
-
-      - name: Configure code signing
-        script: xcode-project use-profiles
-
-      - name: Archive iOS app
+      - name: Build and export IPA
         script: |
-          set -e
-          set -o pipefail
-          xcodebuild archive \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME" \
-            -configuration Release \
-            -destination 'generic/platform=iOS' \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
-
-      - name: Save API key for export
-        script: |
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > auth_key.p8
-          chmod 600 auth_key.p8
-
-      - name: Export IPA
-        script: |
-          set -e
-          set -o pipefail
-          cat > exportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>${TEAM_ID}</string>
-          </dict>
-          </plist>
-          EOF
-          xcodebuild -exportArchive \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
-            -exportPath "$CM_BUILD_DIR/build/ios/ipa" \
-            -exportOptionsPlist exportOptions.plist \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$CM_BUILD_DIR/auth_key.p8" \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
+          xcode-project build-ipa \
+            --project "ios/App/App.xcodeproj" \
+            --scheme "App"
 
     artifacts:
       - build/ios/ipa/*.ipa
-      - build/App.xcarchive
 
     publishing:
       app_store_connect:
