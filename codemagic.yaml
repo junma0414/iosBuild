@@ -54,10 +54,18 @@ workflows:
           // This file is intentionally empty to satisfy SPM requirements.
           EOF
 
-      - name: Save API key for xcodebuild
+      - name: Get profile UUID
         script: |
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > $CM_BUILD_DIR/auth_key.p8
-          chmod 600 $CM_BUILD_DIR/auth_key.p8
+          # 查找并获取描述文件 UUID
+          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
+          if [ -z "$PROFILE_PATH" ]; then
+            echo "No profile found, will use explicit name"
+            PROFILE_UUID="AIVANA_codemagic"
+          else
+            PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
+          fi
+          echo "Using profile: $PROFILE_UUID"
+          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
 
       - name: Archive iOS app
         script: |
@@ -69,12 +77,9 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
             -destination 'generic/platform=iOS' \
-            -authenticationKeyPath "$CM_BUILD_DIR/auth_key.p8" \
-            -authenticationKeyID "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
-            -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID" \
             DEVELOPMENT_TEAM="$TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            -allowProvisioningUpdates
+            CODE_SIGN_STYLE=Manual \
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID"
 
       - name: Create ExportOptions.plist
         script: |
@@ -87,9 +92,14 @@ workflows:
               <key>method</key>
               <string>app-store</string>
               <key>signingStyle</key>
-              <string>automatic</string>
+              <string>manual</string>
               <key>teamID</key>
               <string>${TEAM_ID}</string>
+              <key>provisioningProfiles</key>
+              <dict>
+                  <key>com.lingumate.app</key>
+                  <string>${PROFILE_UUID}</string>
+              </dict>
           </dict>
           </plist>
           EOF
