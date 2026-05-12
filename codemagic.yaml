@@ -32,9 +32,17 @@ workflows:
           npx cap sync ios
           rm -f ios/App/Podfile
           rm -f ios/App/Podfile.lock
-          
-          # 只添加这一行：创建缺失的文件夹
           mkdir -p ios/App/CapApp-SPM
+          cat > ios/App/CapApp-SPM/Package.swift <<EOF
+          // swift-tools-version:5.3
+          import PackageDescription
+          
+          let package = Package(
+              name: "CapApp-SPM",
+              products: [],
+              targets: []
+          )
+          EOF
 
       - name: Archive iOS app
         script: |
@@ -42,13 +50,12 @@ workflows:
           set -o pipefail
 
           xcodebuild archive \
-          -project "$XCODE_PROJECT" \
-          -scheme "$XCODE_SCHEME" \
-          -configuration Release \
-          -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
-          DEVELOPMENT_TEAM="$TEAM_ID" \
-          CODE_SIGN_STYLE=Automatic \
-          -skipPackageDependenciesResolution
+            -project "$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            DEVELOPMENT_TEAM="$TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic
 
       - name: Create ExportOptions.plist
         script: |
