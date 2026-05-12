@@ -36,28 +36,19 @@ workflows:
       - name: Create SPM placeholder package
         script: |
           mkdir -p ios/App/CapApp-SPM/Sources/CapApp-SPM
-
           cat > ios/App/CapApp-SPM/Package.swift <<EOF
           // swift-tools-version:5.3
           import PackageDescription
-
           let package = Package(
               name: "CapApp-SPM",
               products: [
-                  .library(
-                      name: "CapApp-SPM",
-                      targets: ["CapApp-SPM"]
-                  )
+                  .library(name: "CapApp-SPM", targets: ["CapApp-SPM"])
               ],
               targets: [
-                  .target(
-                      name: "CapApp-SPM",
-                      path: "Sources/CapApp-SPM"
-                  )
+                  .target(name: "CapApp-SPM", path: "Sources/CapApp-SPM")
               ]
           )
           EOF
-
           cat > ios/App/CapApp-SPM/Sources/CapApp-SPM/Empty.swift <<EOF
           // Intentionally empty
           EOF
@@ -80,11 +71,7 @@ workflows:
         script: |
           xcode-project use-profiles
 
-      - name: Resolve Swift packages
-        script: |
-          xcodebuild -resolvePackageDependencies \
-            -project "$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME"
+      # 移除可能失败的 Resolve Swift packages 步骤
 
       - name: Archive iOS app
         script: |
@@ -96,7 +83,8 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$CM_BUILD_DIR/build/App.xcarchive"
+            -archivePath "$CM_BUILD_DIR/build/App.xcarchive" \
+            -skipPackageDependenciesResolution
 
       - name: Export IPA
         script: |
