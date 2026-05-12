@@ -11,7 +11,7 @@ workflows:
 
       vars:
         BUNDLE_ID: "com.lingumate.app"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
 
       node: latest
@@ -27,9 +27,6 @@ workflows:
           cp .env.production .env
           NODE_ENV=production npm run build
 
-      # ============================================
-      # 重新生成 iOS 项目，让 Capacitor 自己创建正确的 Podfile
-      # ============================================
       - name: Sync Capacitor iOS
         script: |
           rm -rf ios
@@ -86,7 +83,7 @@ workflows:
       - name: Resolve Swift packages
         script: |
           xcodebuild -resolvePackageDependencies \
-            -workspace "$XCODE_WORKSPACE" \
+            -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME"
 
       - name: Archive iOS app
@@ -95,7 +92,7 @@ workflows:
           set -o pipefail
 
           xcodebuild archive \
-            -workspace "$XCODE_WORKSPACE" \
+            -project "$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
