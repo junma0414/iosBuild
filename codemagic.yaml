@@ -54,23 +54,34 @@ workflows:
           // This file is intentionally empty to satisfy SPM requirements.
           EOF
 
-      - name: Get profile UUID
+      - name: Fetch signing files via API
         script: |
-          # 查找并获取描述文件 UUID
-          PROFILE_PATH=$(ls ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision 2>/dev/null | head -1)
-          if [ -z "$PROFILE_PATH" ]; then
-            echo "No profile found, will use explicit name"
-            PROFILE_UUID="AIVANA_codemagic"
-          else
-            PROFILE_UUID=$(security cms -D -i "$PROFILE_PATH" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print UUID" /dev/stdin 2>/dev/null)
-          fi
-          echo "Using profile: $PROFILE_UUID"
-          echo "PROFILE_UUID=$PROFILE_UUID" >> $CM_ENV
+          echo "=== Fetching signing files via API ==="
+          app-store-connect fetch-signing-files "com.lingumate.app" \
+            --type IOS_APP_STORE \
+            --create \
+            --platform IOS
+          
+          echo "=== Installed profiles ==="
+          ls -la ~/Library/MobileDevice/Provisioning\ Profiles/
+          
+          # 获取实际的 profile 名称
+          for profile in ~/Library/MobileDevice/Provisioning\ Profiles/*.mobileprovision; do
+            if [ -f "$profile" ]; then
+              NAME=$(security cms -D -i "$profile" 2>/dev/null | /usr/libexec/PlistBuddy -c "Print Name" /dev/stdin 2>/dev/null)
+              echo "Found profile: $NAME"
+              echo "PROFILE_NAME=$NAME" >> $CM_ENV
+            fi
+          done
 
       - name: Archive iOS app
         script: |
           set -e
           set -o pipefail
+          
+          # 使用 API 下载的 profile 名称
+          PROFILE_NAME=${PROFILE_NAME:-"AIVANA_codemagic"}
+          echo "Using profile: $PROFILE_NAME"
 
           xcodebuild archive \
             -project "$XCODE_PROJECT" \
@@ -79,10 +90,11 @@ workflows:
             -destination 'generic/platform=iOS' \
             DEVELOPMENT_TEAM="$TEAM_ID" \
             CODE_SIGN_STYLE=Manual \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_UUID"
+            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME"
 
       - name: Create ExportOptions.plist
         script: |
+          PROFILE_NAME=${PROFILE_NAME:-"AIVANA_codemagic"}
           cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
@@ -98,7 +110,7 @@ workflows:
               <key>provisioningProfiles</key>
               <dict>
                   <key>com.lingumate.app</key>
-                  <string>${PROFILE_UUID}</string>
+                  <string>${PROFILE_NAME}</string>
               </dict>
           </dict>
           </plist>
