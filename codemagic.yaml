@@ -1,18 +1,19 @@
 workflows:
   ios-release-workflow:
     name: iOS Build for App Store Connect
+
     instance_type: mac_mini_m2
     max_build_duration: 60
 
     environment:
       groups:
-        - ios_credentials          # 包含 TEAM_ID, API 密钥等
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.lingumate.app
+        - ios_credentials
+
       vars:
-        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        BUNDLE_ID: "com.lingumate.app"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"   # 注意：这里还是用 project
         XCODE_SCHEME: "App"
+
       node: latest
       xcode: latest
 
@@ -25,12 +26,36 @@ workflows:
           cp .env.production .env
           NODE_ENV=production npm run build
 
+      # 1. 创建 Podfile 并执行 cap sync
       - name: Sync Capacitor iOS
-        script: npx cap sync ios
+        script: |
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<'EOF'
+          require_relative '../../node_modules/@capacitor/cli/bin/scripts/podfile_helpers'
+          platform :ios, '14.0'
+          target 'App' do
+            capacitor_pods
+          end
+          EOF
+          npx cap sync ios
 
-      - name: Set up code signing
+      # 2. 获取签名文件（保留原有 fetch-signing-files）
+      - name: Fetch signing files
+        script: |
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      # 3. 设置签名（保留原有的 keychain 和 use-profiles）
+      - name: Add certificates to keychain
+        script: keychain add-certificates
+
+      - name: Configure code signing
         script: xcode-project use-profiles
 
+      # ============================================
+      # 4. 核心改动：使用 xcode-project build-ipa 替代手动 archive + export
+      # ============================================
       - name: Build and export IPA
         script: |
           cd ios/App
@@ -47,6 +72,7 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
+
       email:
         recipients:
           - junma0614@gmail.com
