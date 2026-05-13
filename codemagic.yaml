@@ -1,19 +1,18 @@
 workflows:
   ios-release-workflow:
     name: iOS Build for App Store Connect
-
     instance_type: mac_mini_m2
     max_build_duration: 60
 
     environment:
       groups:
         - ios_credentials
-
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.lingumate.app
       vars:
-        BUNDLE_ID: "com.lingumate.app"
-        XCODE_PROJECT: "ios/App/App.xcodeproj"   # 注意：这里还是用 project
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
         XCODE_SCHEME: "App"
-
       node: latest
       xcode: latest
 
@@ -26,41 +25,38 @@ workflows:
           cp .env.production .env
           NODE_ENV=production npm run build
 
-      # 1. 创建 Podfile 并执行 cap sync
-      - name: Sync Capacitor iOS
+      - name: Setup iOS project and CocoaPods
         script: |
-          mkdir -p ios/App
-          cat > ios/App/Podfile <<'EOF'
+          rm -rf ios
+          npx cap add ios
+          cd ios/App
+          # 创建 Capacitor 标准的 Podfile
+          cat > Podfile <<'EOF'
           require_relative '../../node_modules/@capacitor/cli/bin/scripts/podfile_helpers'
           platform :ios, '14.0'
           target 'App' do
             capacitor_pods
           end
           EOF
-          npx cap sync ios
+          pod install
+          cd ../..
 
-      # 2. 获取签名文件（保留原有 fetch-signing-files）
       - name: Fetch signing files
         script: |
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
             --create
 
-      # 3. 设置签名（保留原有的 keychain 和 use-profiles）
-      - name: Add certificates to keychain
-        script: keychain add-certificates
-
       - name: Configure code signing
-        script: xcode-project use-profiles
+        script: |
+          keychain add-certificates
+          xcode-project use-profiles
 
-      # ============================================
-      # 4. 核心改动：使用 xcode-project build-ipa 替代手动 archive + export
-      # ============================================
       - name: Build and export IPA
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --project "$XCODE_PROJECT" \
+            --workspace "$XCODE_WORKSPACE" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
