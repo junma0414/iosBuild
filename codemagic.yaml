@@ -24,10 +24,8 @@ workflows:
           cp .env.production .env
           NODE_ENV=production npm run build
 
-      - name: Sync Capacitor iOS (use existing iOS project)
-        script: |
-          npx cap sync ios
-          ls -la ios/App/
+      - name: Sync Capacitor iOS
+        script: npx cap sync ios
 
       - name: Increment build number
         script: |
@@ -46,24 +44,9 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
-          cat > $CM_BUILD_DIR/exportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>${TEAM_ID}</string>
-              <key>ITSAppUsesNonExemptEncryption</key>
-              <false/>
-          </dict>
-          </plist>
-          EOF
           xcode-project build-ipa \
             --project "App.xcodeproj" \
-            --scheme "$XCODE_SCHEME" \
-            --export-options-plist $CM_BUILD_DIR/exportOptions.plist
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
