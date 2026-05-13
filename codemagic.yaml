@@ -30,7 +30,6 @@ workflows:
           rm -rf ios
           npx cap add ios
           cd ios/App
-          # 创建 Capacitor 标准的 Podfile
           cat > Podfile <<'EOF'
           require_relative '../../node_modules/@capacitor/cli/bin/scripts/podfile_helpers'
           platform :ios, '14.0'
@@ -40,12 +39,6 @@ workflows:
           EOF
           pod install
           cd ../..
-
-      - name: Fetch signing files
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
 
       - name: Configure code signing
         script: |
