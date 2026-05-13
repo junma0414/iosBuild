@@ -11,7 +11,7 @@ workflows:
         distribution_type: app_store
         bundle_identifier: com.lingumate.app
       vars:
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
       node: latest
       xcode: latest
@@ -25,11 +25,12 @@ workflows:
           cp .env.production .env
           NODE_ENV=production npm run build
 
-      - name: Setup iOS project and CocoaPods
+      - name: Setup iOS project
         script: |
           rm -rf ios
           npx cap add ios
           cd ios/App
+          # 创建 Podfile 以满足 cap sync 要求（即使项目不使用 pods）
           cat > Podfile <<'EOF'
           require_relative '../../node_modules/@capacitor/cli/bin/scripts/podfile_helpers'
           platform :ios, '14.0'
@@ -37,7 +38,7 @@ workflows:
             capacitor_pods
           end
           EOF
-          pod install
+          pod install || true   # 允许失败，因为项目可能不需要 pods
           cd ../..
 
       - name: Configure code signing
@@ -49,7 +50,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
