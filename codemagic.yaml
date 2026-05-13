@@ -40,17 +40,24 @@ workflows:
           ls -la ios/App/
 
           # ============================================
-          # 修复启动崩溃：改用纯代码加载，绕过故事板
+          # 彻底移除故事板文件及 Xcode 项目引用
           # ============================================
           # 1. 删除故事板文件
           rm -f ios/App/App/Base.lproj/Main.storyboard
           rm -f ios/App/App/Base.lproj/LaunchScreen.storyboard
           
-          # 2. 清空 Info.plist 中的故事板引用
+          # 2. 从 project.pbxproj 中移除故事板引用
+          cd ios/App
+          # 删除包含 Main.storyboard 或 LaunchScreen.storyboard 的行
+          sed -i '' '/Main.storyboard/d' App.xcodeproj/project.pbxproj
+          sed -i '' '/LaunchScreen.storyboard/d' App.xcodeproj/project.pbxproj
+          cd ../..
+          
+          # 3. 清空 Info.plist 中的故事板引用
           /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName ''" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile ''" ios/App/App/Info.plist
           
-          # 3. 替换 AppDelegate.swift 为代码加载版本
+          # 4. 替换 AppDelegate.swift 为代码加载版本
           cat > ios/App/App/AppDelegate.swift <<'EOF'
           import UIKit
           import Capacitor
