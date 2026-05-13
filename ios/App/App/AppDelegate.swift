@@ -7,7 +7,16 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
+        // 添加全局异常捕获，用于记录崩溃详情
+        NSSetUncaughtExceptionHandler { exception in
+            print("========== Uncaught Exception ==========")
+            print("Name: \(exception.name)")
+            print("Reason: \(exception.reason ?? "nil")")
+            print("Call Stack: \(exception.callStackSymbols.joined(separator: "\n"))")
+            print("========================================")
+        }
+        
+        // 原有的启动逻辑（完全保持不变）
         return true
     }
 
@@ -45,5 +54,4 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         // tracking app url opens, make sure to keep this call
         return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
     }
-
 }
