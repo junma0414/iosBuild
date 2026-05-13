@@ -1,17 +1,18 @@
 workflows:
   ios-release-workflow:
     name: iOS Build for App Store Connect
-
     instance_type: mac_mini_m2
     max_build_duration: 60
 
     environment:
       groups:
-        - ios_credentials
-
+        - ios_credentials          # 包含 TEAM_ID, API 密钥等
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.lingumate.app
       vars:
-        BUNDLE_ID: "com.lingumate.app"
-
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_SCHEME: "App"
       node: latest
       xcode: latest
 
@@ -25,43 +26,20 @@ workflows:
           NODE_ENV=production npm run build
 
       - name: Sync Capacitor iOS
-        script: |
-          rm -rf ios
-          npx cap add ios
-          npx cap sync ios
+        script: npx cap sync ios
 
-      - name: Fetch signing files
-        script: |
-          app-store-connect fetch-signing-files "$BUNDLE_ID" \
-            --type IOS_APP_STORE \
-            --create
-
-      - name: Create export options plist
-        script: |
-          cat > exportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-              <key>method</key>
-              <string>app-store-connect</string>
-              <key>teamID</key>
-              <string>${TEAM_ID}</string>
-              <key>signingStyle</key>
-              <string>automatic</string>
-          </dict>
-          </plist>
-          EOF
+      - name: Set up code signing
+        script: xcode-project use-profiles
 
       - name: Build and export IPA
         script: |
+          cd ios/App
           xcode-project build-ipa \
-            --project "ios/App/App.xcodeproj" \
-            --scheme "App" \
-            --export-options-plist exportOptions.plist
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
-      - build/ios/ipa/*.ipa
+      - ios/App/build/ios/ipa/*.ipa
 
     publishing:
       app_store_connect:
@@ -69,7 +47,6 @@ workflows:
         key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
         issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
-
       email:
         recipients:
           - junma0614@gmail.com
