@@ -28,7 +28,6 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
-          # 创建空 Podfile 以避免 cap sync 报错
           mkdir -p ios/App
           cat > ios/App/Podfile <<EOF
           platform :ios, '14.0'
@@ -36,16 +35,10 @@ workflows:
           end
           EOF
           npx cap sync ios
-          # 确认项目文件存在
           ls -la ios/App/
 
-          # ============================================
-          # 彻底解决故事板编译错误：生成空白的故事板文件
-          # ============================================
-          # 1. 确保 Base.lproj 目录存在
+          # 生成空白故事板文件（修复编译错误）
           mkdir -p ios/App/App/Base.lproj
-          
-          # 2. 生成空的 LaunchScreen.storyboard
           cat > ios/App/App/Base.lproj/LaunchScreen.storyboard <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="22154" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
@@ -84,7 +77,6 @@ workflows:
           </document>
           EOF
           
-          # 3. 生成空的 Main.storyboard
           cat > ios/App/App/Base.lproj/Main.storyboard <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="22154" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" useSafeAreas="YES" colorMatched="YES" initialViewController="ArY-VK-xAf">
@@ -112,11 +104,9 @@ workflows:
           </document>
           EOF
           
-          # 4. 清空 Info.plist 中的故事板引用（可选，保留也没问题）
           /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist
           
-          # 5. 替换 AppDelegate.swift 为代码加载版本（确保使用代码视图）
           cat > ios/App/App/AppDelegate.swift <<'EOF'
           import UIKit
           import Capacitor
@@ -127,15 +117,10 @@ workflows:
               var window: UIWindow?
 
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  // 创建窗口
                   window = UIWindow(frame: UIScreen.main.bounds)
-                  
-                  // 创建 Capacitor 视图控制器
                   let bridgeViewController = CAPBridgeViewController()
-                  
                   window?.rootViewController = bridgeViewController
                   window?.makeKeyAndVisible()
-                  
                   return true
               }
 
@@ -148,6 +133,17 @@ workflows:
               }
           }
           EOF
+
+      - name: Increment build number
+        script: |
+          cd ios/App
+          # 从 App Store Connect 获取最新的构建版本号（如果没有，默认为 0）
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "6767740956" 2>/dev/null || echo "0")
+          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          echo "Latest TestFlight build number: $LATEST_BUILD_NUMBER"
+          echo "New build number: $NEW_BUILD_NUMBER"
+          # 更新项目中的版本号
+          agvtool new-version -all $NEW_BUILD_NUMBER
 
       - name: Configure code signing
         script: |
