@@ -405,21 +405,35 @@ const Login = () => {
 
     try {
       if (isNative) {
-        // ========== 移动端：通过后端获取 OAuth URL ==========
-        const platform = isIOS() ? 'ios' : 'android';
-        const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/auth/google/mobile-init?platform=${platform}`);
-        const data = await response.json();
-
-        if (!data.authUrl) {
-          throw new Error('Failed to get OAuth URL');
+        // ========== 移动端：使用原生 Google Sign-In 插件 ==========
+        if (!window.Capacitor?.Plugins?.GoogleSignIn) {
+          throw new Error('Google Sign-In plugin not available');
         }
 
-        if (window.Capacitor?.Plugins?.Browser) {
-          await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
-          setTimeout(() => setLoading(false), 1000);
+        const result = await window.Capacitor.Plugins.GoogleSignIn.handleSignInButton();
+
+        if (!result?.response?.identityToken && !result?.response?.serverAuthCode) {
+          throw new Error('No auth token from Google');
+        }
+
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/auth/google/callback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code: result.response.serverAuthCode,
+            identityToken: result.response.identityToken,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          navigate('/');
+          return;
         } else {
-          window.location.href = data.authUrl;
+          throw new Error(data.error || 'Google login failed');
         }
       } else {
         // ========== Web 端：直接重定向 ==========
