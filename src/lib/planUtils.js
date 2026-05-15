@@ -254,12 +254,10 @@ export function isGooglePlayPayment() {
 }
 
 // 获取RevenueCat产品包ID（用于购买）
-// RevenueCat 上的 Package identifier:
-//   pro_monthly_pkg, pro_yearly_pkg, premium_montly_pkg, premium_yearly_pkg
 export function getRevenueCatPackageId(plan, billing) {
   const packageIds = {
-    pro: { monthly: 'pro_monthly_pkg', yearly: 'pro_yearly_pkg' },
-    premium: { monthly: 'premium_montly_pkg', yearly: 'premium_yearly_pkg' }
+    pro: { monthly: 'pro_monthly', yearly: 'pro_yearly' },
+    premium: { monthly: 'premium_monthly', yearly: 'premium_yearly' }
   };
   
   const packageId = packageIds[plan]?.[billing];
