@@ -49,5 +49,16 @@
 	<true/>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>com.lingumate.omnifamily</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.lingumate.omnifamily</string>
+		</dict>
+	</array>
 </dict>
 </plist>

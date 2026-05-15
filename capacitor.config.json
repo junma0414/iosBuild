@@ -19,7 +19,8 @@
     },
     "GoogleSignIn": {
       "AndroidServerClientId": "925702138089-urh2idvjauf1tbpv57vj1cj39tu6sdo6.apps.googleusercontent.com"
-    }
+    },
+    "SignInWithApple": {}
   },
   "ios": {
     "contentInset": "automatic",

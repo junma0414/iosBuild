@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLanguage } from "../../lib/LanguageContext";
 import { SUPPORTED_LANGUAGES, LEARNING_LANGUAGES } from "../../lib/i18n";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -8,7 +8,7 @@ import { ChevronDown, Lock } from "lucide-react";
 import { base44 } from "../../api/base44Client";
 import { getAllowedLanguages } from "../../lib/planUtils";
 
-function LanguageList({ languages, current, setter, onSelect, allowedCodes }) {
+function LanguageList({ languages, current, onSelect, allowedCodes, onLanguageClick }) {
 
   const { t } = useLanguage();
 
@@ -20,7 +20,7 @@ function LanguageList({ languages, current, setter, onSelect, allowedCodes }) {
           return (
             <button
               key={lang.code}
-              onClick={() => { if (!locked) { setter(lang.code); onSelect?.(); } }}
+              onClick={() => { if (!locked) { onLanguageClick(lang.code); onSelect?.(); } }}
               className={`flex items-center gap-2 px-3 py-3 rounded-lg text-sm transition-all min-h-[44px] relative ${
                 locked
                   ? "opacity-40 cursor-not-allowed text-muted-foreground"
@@ -50,7 +50,7 @@ export default function LanguageSwitcher({ type = "ui" }) {
   const [user, setUser] = useState(null);
 
   useEffect(() => {
-    base44.auth.me().then(setUser).catch(() => {});
+    base44.auth.me().then(setUser).catch(() => setUser(null));
   }, []);
 
   const uiLangs = SUPPORTED_LANGUAGES.filter(l => ["en","zh","ja","ko","es","fr","de","it","pt","ru","ar","hi","tr","vi","th"].includes(l.code));
@@ -63,6 +63,7 @@ export default function LanguageSwitcher({ type = "ui" }) {
 
   const [isMobile, setIsMobile] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const selectedRef = useRef(false);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -71,11 +72,19 @@ export default function LanguageSwitcher({ type = "ui" }) {
     return () => window.removeEventListener("resize", check);
   }, []);
 
+  const handleSelectLanguage = (code) => {
+    if (selectedRef.current) return;
+    selectedRef.current = true;
+    setter(code);
+    setDrawerOpen(false);
+    setTimeout(() => { selectedRef.current = false; }, 300);
+  };
+
   const currentLang = languages.find(l => l.code === current);
 
   if (isMobile) {
     return (
-      <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
+      <Drawer open={drawerOpen} onOpenChange={(open) => { setDrawerOpen(open); if (!open) selectedRef.current = false; }}>
         <DrawerTrigger asChild>
           <button
             className="flex items-center gap-2 w-full px-3 py-3 rounded-xl border border-border bg-secondary text-sm font-medium text-foreground min-h-[44px]"
@@ -94,9 +103,9 @@ export default function LanguageSwitcher({ type = "ui" }) {
             <LanguageList
               languages={languages}
               current={current}
-              setter={setter}
               onSelect={() => setDrawerOpen(false)}
               allowedCodes={allowedCodes}
+              onLanguageClick={handleSelectLanguage}
             />
           </div>
         </DrawerContent>
@@ -105,6 +114,6 @@ export default function LanguageSwitcher({ type = "ui" }) {
   }
 
   return (
-    <LanguageList languages={languages} current={current} setter={setter} allowedCodes={allowedCodes} />
+    <LanguageList languages={languages} current={current} allowedCodes={allowedCodes} onLanguageClick={(code) => setter(code)} />
   );
 }

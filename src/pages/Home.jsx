@@ -530,6 +530,17 @@ const fetchUserStats = async () => {
     }
   };
 
+  // iOS WKWebView 兼容：使用 Capacitor Browser 打开法律文档链接
+  const openLegalLink = (path) => {
+    const isNative = isNativeApp();
+    if (isNative && window.Capacitor?.Plugins?.Browser) {
+      const url = `${window.location.origin}${path}`;
+      window.Capacitor.Plugins.Browser.open({ url });
+    } else {
+      window.open(path, '_blank');
+    }
+  };
+
   const handleCopyLink = async () => {
     const shareUrl = window.location.origin;
     try {
@@ -812,12 +823,12 @@ const fetchUserStats = async () => {
             </div>
           </div>
           <div className="mt-3 flex flex-wrap gap-4">
-            <a href="/terms" target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline hover:no-underline">
+            <button onClick={() => openLegalLink('/terms')} className="text-sm text-primary underline hover:no-underline bg-transparent border-none cursor-pointer p-0">
               {t("termsOfService")}
-            </a>
-            <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline hover:no-underline">
+            </button>
+            <button onClick={() => openLegalLink('/privacy')} className="text-sm text-primary underline hover:no-underline bg-transparent border-none cursor-pointer p-0">
               {t("privacyPolicy")}
-            </a>
+            </button>
           </div>
         </Card>
 

@@ -249,8 +249,8 @@ export default function Subscription() {
 
   const getRevenueCatPackageId = (plan, billing) => {
   const packageMap = {
-    pro: { monthly: 'pro_monthly', yearly: 'pro_yearly' },
-    premium: { monthly: 'premium_monthly', yearly: 'premium_yearly' }
+    pro: { monthly: 'pro_monthly_pkg', yearly: 'pro_yearly_pkg' },
+    premium: { monthly: 'premium_montly_pkg', yearly: 'premium_yearly_pkg' }
   };
   return packageMap[plan]?.[billing];
 };

@@ -253,29 +253,18 @@ export function isGooglePlayPayment() {
   return getPaymentPlatform() === 'googleplay';
 }
 
-// 获取平台特定价格ID（RevenueCat）
-export function getPlatformPriceId(plan, billing) {
-  const platform = getPaymentPlatform();
-  
-  // RevenueCat 产品 ID（需要在 RevenueCat Dashboard 中配置）
-  const productIds = {
-    pro: { monthly: 'pro_monthly', yearly: 'pro_yearly' },
-    premium: { monthly: 'premium_monthly', yearly: 'premium_yearly' }
+// 获取RevenueCat产品包ID（用于购买）
+// RevenueCat 上的 Package identifier:
+//   pro_monthly_pkg, pro_yearly_pkg, premium_montly_pkg, premium_yearly_pkg
+export function getRevenueCatPackageId(plan, billing) {
+  const packageIds = {
+    pro: { monthly: 'pro_monthly_pkg', yearly: 'pro_yearly_pkg' },
+    premium: { monthly: 'premium_montly_pkg', yearly: 'premium_yearly_pkg' }
   };
   
-  const productId = productIds[plan]?.[billing];
+  const packageId = packageIds[plan]?.[billing];
   
-  console.log('getPlatformPriceId:', { platform, plan, billing, productId });
+  console.log('getRevenueCatPackageId:', { plan, billing, packageId });
   
-  return productId;
-}
-
-// 获取RevenueCat产品包ID（用于购买）
-export function getRevenueCatPackageId(plan, billing) {
-  const productId = getPlatformPriceId(plan, billing);
-  if (!productId) return null;
-  
-  console.log('getRevenueCatPackageId:', { plan, billing, productId });
-  
-  return productId;
+  return packageId;
 }
