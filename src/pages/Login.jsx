@@ -404,25 +404,40 @@ const Login = () => {
     const isNative = isNativeApp();
 
     try {
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      if (!clientId) {
-        throw new Error('Google Client ID not configured');
-      }
+      if (isNative) {
+        // ========== 移动端：通过后端获取正确的 OAuth URL（含正确 redirect_uri） ==========
+        const platform = isIOS() ? 'ios' : 'android';
+        const apiUrl = getApiUrl();
+        const response = await fetch(`${apiUrl}/auth/google/mobile-init?platform=${platform}`);
+        const data = await response.json();
 
-      const redirectUri = `${window.location.origin}/auth/google/callback`;
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `response_type=code&` +
-        `scope=email profile openid&` +
-        `access_type=online&` +
-        `prompt=select_account&` +
-        `state=${Date.now()}`;
+        if (!data.authUrl) {
+          throw new Error('Failed to get OAuth URL');
+        }
 
-      if (isNative && window.Capacitor?.Plugins?.Browser) {
-        await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-        setTimeout(() => setLoading(false), 1000);
+        if (window.Capacitor?.Plugins?.Browser) {
+          await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
+          setTimeout(() => setLoading(false), 1000);
+        } else {
+          window.location.href = data.authUrl;
+        }
       } else {
+        // ========== Web 端：直接重定向 ==========
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId) {
+          throw new Error('Google Client ID not configured');
+        }
+
+        const redirectUri = `${window.location.origin}/auth/google/callback`;
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `response_type=code&` +
+          `scope=email profile openid&` +
+          `access_type=online&` +
+          `prompt=select_account&` +
+          `state=${Date.now()}`;
+
         window.location.href = authUrl;
       }
     } catch (err) {
