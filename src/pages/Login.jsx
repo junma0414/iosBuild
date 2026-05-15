@@ -405,21 +405,28 @@ const Login = () => {
 
     try {
       if (isNative) {
-        // ========== 移动端：通过后端获取正确的 OAuth URL（含正确 redirect_uri） ==========
+        // ========== 移动端：使用自定义 scheme 回调 + 对应平台 client_id ==========
         const platform = isIOS() ? 'ios' : 'android';
-        const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/auth/google/mobile-init?platform=${platform}`);
-        const data = await response.json();
-
-        if (!data.authUrl) {
-          throw new Error('Failed to get OAuth URL');
+        const clientId = platform === 'android'
+          ? import.meta.env.VITE_GOOGLE_ANDROID_CLIENT_ID
+          : import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId) {
+          throw new Error('Google Client ID not configured for ' + platform);
         }
+        const redirectUri = 'com.lingumate.app://oauth2callback';
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `response_type=code&` +
+          `scope=email profile openid&` +
+          `access_type=offline&` +
+          `prompt=consent`;
 
         if (window.Capacitor?.Plugins?.Browser) {
-          await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
+          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
           setTimeout(() => setLoading(false), 1000);
         } else {
-          window.location.href = data.authUrl;
+          window.location.href = authUrl;
         }
       } else {
         // ========== Web 端：直接重定向 ==========
