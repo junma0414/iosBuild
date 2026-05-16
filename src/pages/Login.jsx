@@ -4,11 +4,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 import { useLanguage } from '../lib/LanguageContext';
-import { Chrome, Apple as AppleIcon, Mail } from 'lucide-react';
+import { Chrome, Apple, Mail } from 'lucide-react';
 import { isNativeApp, isIOS, isAndroid } from '../lib/planUtils';
 import { base44 } from '../api/base44Client';
 
-
+import { GoogleSignIn } from 'capacitor-google-sign-in';
 
 
 
@@ -278,18 +278,6 @@ const Login = () => {
     }
   };
 
-  // 处理法律条款/隐私链接点击（iOS WKWebView 不支持 target="_blank"）
-  const handleLegalLink = (e, path) => {
-    e.preventDefault();
-    const isNative = isNativeApp();
-    if (isNative && window.Capacitor?.Plugins?.Browser) {
-      const url = `${window.location.origin}${path}`;
-      window.Capacitor.Plugins.Browser.open({ url });
-    } else {
-      window.location.href = path;
-    }
-  };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -397,50 +385,96 @@ const Login = () => {
   }; */
 
   const handleGoogleLogin = async () => {
-    if (loading) return;
-    setLoading(true);
-    setError('');
+  console.log('📱 [handleGoogleLogin] started, loading:', loading);
+  if (loading) return;
+  
+  setLoading(true);
+  setError('');
 
-    const isNative = isNativeApp();
+  const isNative = isNativeApp();
+  console.log('📱 [handleGoogleLogin] isNative:', isNative);
 
+  if (isNative) {
     try {
-      if (isNative) {
-        // ========== 移动端：使用原生 Google Sign-In 插件 ==========
-        if (!window.Capacitor?.Plugins?.GoogleSignIn) {
-          throw new Error('Google Sign-In plugin not available');
-        }
+      // ========== Native: capacitor-google-sign-in ==========
+      console.log('📱 [handleGoogleLogin] using capacitor-google-sign-in');
 
-        const result = await window.Capacitor.Plugins.GoogleSignIn.handleSignInButton();
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        throw new Error('Google Client ID not configured');
+      }
 
-        if (!result?.response?.identityToken && !result?.response?.serverAuthCode) {
-          throw new Error('No auth token from Google');
-        }
+      const result = await GoogleSignIn.handleSignInButton();
+      console.log('📱 [handleGoogleLogin] signIn result:', result);
 
-        const apiUrl = getApiUrl();
-        const response = await fetch(`${apiUrl}/auth/google/callback`, {
+      const idToken = result?.response?.identityToken || null;
+      const serverAuthCode = result?.response?.serverAuthCode || null;
+
+      if (idToken) {
+        console.log('📱 [handleGoogleLogin] using idToken');
+        // Send idToken to backend
+        const apiUrl = `${getApiUrl()}/auth/google`;
+        console.log('📱 [handleGoogleLogin] sending idToken to backend:', apiUrl);
+
+        const response = await fetch(apiUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            code: result.response.serverAuthCode,
-            identityToken: result.response.identityToken,
-          }),
+          body: JSON.stringify({ idToken }),
         });
 
         const data = await response.json();
+        console.log('📱 [handleGoogleLogin] backend response status:', response.status);
+        console.log('📱 [handleGoogleLogin] has accessToken:', !!data.accessToken);
+
+        if (!response.ok) {
+          throw new Error(data.error || `Backend returned ${response.status}`);
+        }
+
         if (data.accessToken) {
           localStorage.setItem('accessToken', data.accessToken);
           if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          console.log('📱 [handleGoogleLogin] tokens saved, navigating to app...');
+          setLoading(false);
+          checkAuth();
           navigate('/');
           return;
         } else {
-          throw new Error(data.error || 'Google login failed');
+          throw new Error('No accessToken from backend');
         }
-      } else {
-        // ========== Web 端：直接重定向 ==========
+      } else if (serverAuthCode) {
+        console.log('📱 [handleGoogleLogin] no idToken, using serverAuthCode with backend exchange');
+        try {
+          const apiUrl = getApiUrl();
+          const response = await fetch(`${apiUrl}/auth/google/callback`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code: serverAuthCode }),
+          });
+
+          const data = await response.json();
+          console.log('📱 [handleGoogleLogin] callback response status:', response.status);
+
+          if (data.accessToken) {
+            localStorage.setItem('accessToken', data.accessToken);
+            if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+            console.log('📱 [handleGoogleLogin] tokens saved, navigating to app...');
+            setLoading(false);
+            checkAuth();
+            navigate('/');
+            return;
+          } else {
+            throw new Error(data.error || 'Failed to exchange server auth code');
+          }
+        } catch (exchangeErr) {
+          console.error('📱 [handleGoogleLogin] serverAuthCode exchange failed, falling back to OAuth redirect:', exchangeErr);
+        }
+      }
+
+      // Fallback: 如果 idToken 和 serverAuthCode 都失败，走 Web OAuth 重定向
+      console.log('📱 [handleGoogleLogin] falling back to OAuth redirect flow');
+      try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId) {
-          throw new Error('Google Client ID not configured');
-        }
+        if (!clientId) throw new Error('Google Client ID not configured');
 
         const redirectUri = `${window.location.origin}/auth/google/callback`;
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -453,58 +487,82 @@ const Login = () => {
           `state=${Date.now()}`;
 
         window.location.href = authUrl;
+      } catch (fallbackErr) {
+        console.error('📱 [handleGoogleLogin] fallback error:', fallbackErr);
+        throw new Error('Google login failed: unable to authenticate');
       }
     } catch (err) {
-      console.error('Google login error:', err);
+      console.error('📱 [handleGoogleLogin] capawesome error:', err);
       setError(err.message || 'Google login failed');
       setLoading(false);
     }
-  };
+    return;
+  }
 
-  // Apple 登录处理（iOS 原生使用 @capacitor-community/apple-sign-in 插件）
+  // ========== Web: OAuth redirect ==========
+  try {
+    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+    if (!clientId) {
+      setError('Google Client ID not configured');
+      setLoading(false);
+      return;
+    }
+
+    const redirectUri = `${window.location.origin}/auth/google/callback`;
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+      `client_id=${clientId}&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `response_type=code&` +
+      `scope=email profile openid&` +
+      `access_type=online&` +
+      `prompt=select_account&` +
+      `state=${Date.now()}`;
+
+    window.location.href = authUrl;
+  } catch (err) {
+    console.error('Google login error:', err);
+    setError(err.message || 'Google login failed');
+    setLoading(false);
+  }
+};
+
+  // Apple 登录处理
   const handleAppleLogin = async () => {
+    console.log('🍎 [handleAppleLogin] started');
     if (loading) return;
     setLoading(true);
     setError('');
 
     try {
+      const clientId = import.meta.env.VITE_APPLE_CLIENT_ID;
+      if (!clientId) {
+        setError('Apple Client ID not configured');
+        setLoading(false);
+        return;
+      }
+
+      // 让后端构造 Apple OAuth URL 并处理 callback
+      // 后端接收 Apple 的 form_post，再重定向回前端带上 token
       const apiUrl = getApiUrl();
+      const response = await fetch(`${apiUrl}/auth/apple/init`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await response.json();
 
-      // iOS 原生：通过 Capacitor 插件调用系统 Apple 登录
-      if (isIOS() && window.Capacitor?.Plugins?.SignInWithApple) {
-        const result = await window.Capacitor.Plugins.SignInWithApple.authorize({
-          scopes: 'name email',
-        });
+      if (!data.authUrl) {
+        throw new Error('Failed to get Apple OAuth URL');
+      }
 
-        if (!result?.response?.identityToken) {
-          throw new Error('No identity token from Apple');
-        }
-
-        const identityToken = result.response.identityToken;
-        const fullName = result.response.givenName
-          ? `${result.response.givenName || ''} ${result.response.familyName || ''}`.trim() || null
-          : null;
-
-        const response = await fetch(`${apiUrl}/auth/apple`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identityToken, fullName }),
-        });
-
-        const data = await response.json();
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-          navigate('/');
-          return;
-        } else {
-          throw new Error(data.error || 'Apple login failed');
-        }
+      const isNative = isNativeApp();
+      if (isNative && window.Capacitor?.Plugins?.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
+        setTimeout(() => setLoading(false), 1000);
       } else {
-        throw new Error('Apple Sign-In is only available on iOS devices');
+        window.location.href = data.authUrl;
       }
     } catch (err) {
-      console.error('Apple login error:', err);
+      console.error('🍎 Apple login error:', err);
       setError(err.message || 'Apple login failed');
       setLoading(false);
     }
@@ -765,16 +823,18 @@ const Login = () => {
                   I agree to the{' '}
                   <a 
                     href="/terms" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
                     className="text-primary hover:underline"
-                    onClick={(e) => handleLegalLink(e, '/terms')}
                   >
                     Terms of Service
                   </a>{' '}
                   and{' '}
                   <a 
                     href="/privacy" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
                     className="text-primary hover:underline"
-                    onClick={(e) => handleLegalLink(e, '/privacy')}
                   >
                     Privacy Policy
                   </a>
@@ -823,15 +883,15 @@ const Login = () => {
             </button>
           )}
 
-          {/* Apple 登录按钮（仅 iOS 原生显示） */}
-          {isIOS() && !isRegister && (
+          {/* Apple 登录按钮 */}
+          {!isRegister && (
             <button
               type="button"
               onClick={handleAppleLogin}
               disabled={loading}
               className="w-full flex items-center justify-center gap-3 bg-black text-white font-semibold py-3 rounded-lg hover:bg-gray-800 transition disabled:opacity-50"
             >
-              <AppleIcon className="w-5 h-5" />
+              <Apple className="w-5 h-5" />
               {t('signInWithApple')}
             </button>
           )}
@@ -853,7 +913,7 @@ const Login = () => {
                 : "Don't have an account? Sign up"}
             </button>
           </div>
-        </form> 
+        </form>
 
         {!isRegister && (
           <div className="mt-8 pt-6 border-t border-gray-200">
@@ -861,16 +921,18 @@ const Login = () => {
               By continuing, you agree to our{' '}
               <a 
                 href="/terms" 
+                target="_blank" 
+                rel="noopener noreferrer"
                 className="text-primary hover:underline"
-                onClick={(e) => handleLegalLink(e, '/terms')}
               >
                 Terms of Service
               </a>{' '}
               and{' '}
               <a 
                 href="/privacy" 
+                target="_blank" 
+                rel="noopener noreferrer"
                 className="text-primary hover:underline"
-                onClick={(e) => handleLegalLink(e, '/privacy')}
               >
                 Privacy Policy
               </a>
