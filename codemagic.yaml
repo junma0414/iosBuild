@@ -37,27 +37,6 @@ workflows:
           npx cap sync ios
           ls -la ios/App/
 
-          # 修复 SPM 依赖冲突 - 统一 capacitor-swift-pm 版本为 8.x
-          cd ios/App
-          mkdir -p App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          cat > App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved <<'RESOLVED'
-          {
-            "pins" : [
-              {
-                "identity" : "capacitor-swift-pm",
-                "kind" : "remoteSourceControl",
-                "location" : "https://github.com/ionic-team/capacitor-swift-pm",
-                "state" : {
-                  "revision" : "f54de170d55c95b4cc1f99c7522b1a70a73e37d4",
-                  "version" : "8.0.0"
-                }
-              }
-            ],
-            "version" : 1
-          }
-          RESOLVED
-          cd ../..
-
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
           cat > ios/App/App/Base.lproj/Main.storyboard <<'EOF'
@@ -162,39 +141,38 @@ workflows:
         script: |
           cd ios/App
           
-          # 使用 xcodebuild 替代 xcode-project build-ipa
-          echo "Building archive..."
+          # 删除损坏的 Package.resolved 文件
+          rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
+          rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/package.resolved
+          
+          # 使用 xcodebuild 构建
           xcodebuild archive \
             -project App.xcodeproj \
             -scheme App \
             -archivePath build/App.xcarchive \
             -configuration Release \
-            -destination generic/platform=iOS \
-            CODE_SIGN_IDENTITY="iPhone Distribution" \
-            CODE_SIGNING_REQUIRED=YES \
-            CODE_SIGNING_ALLOWED=YES \
-            OTHER_CODE_SIGN_FLAGS="--keychain $(pwd)/../../keychain.keychain" \
             -allowProvisioningUpdates
           
-          echo "Exporting IPA..."
-          xcodebuild -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist <(cat <<EOF
+          # 创建 exportOptions.plist 文件
+          cat > exportOptions.plist <<EOF
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0">
           <dict>
             <key>method</key>
             <string>app-store</string>
-            <key>teamID</key>
-            <string>\$TEAM_ID</string>
             <key>uploadSymbols</key>
             <true/>
           </dict>
           </plist>
           EOF
-          ) -allowProvisioningUpdates
+          
+          # 导出 IPA
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist exportOptions.plist \
+            -allowProvisioningUpdates
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
