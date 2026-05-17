@@ -70,10 +70,6 @@ workflows:
           
           target 'App' do
             use_frameworks! :linkage => :static
-            
-            # CocoaPods 依赖
-            pod 'Capacitor', :git => 'https://github.com/ionic-team/capacitor.git', :tag => '7.0.0'
-            pod 'CapacitorCordova', :git => 'https://github.com/ionic-team/capacitor.git', :tag => '7.0.0'
           end
           
           post_install do |installer|
@@ -91,36 +87,14 @@ workflows:
           echo "Running cap sync ios..."
           npx cap sync ios
           
-          echo "Creating Package.resolved to resolve SPM conflicts..."
-          cd ios/App
-          mkdir -p App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
-          
-          cat > App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved <<'RESOLVED_EOF'
-          {
-            "pins" : [
-              {
-                "identity" : "capacitor-swift-pm",
-                "kind" : "remoteSourceControl",
-                "location" : "https://github.com/ionic-team/capacitor-swift-pm",
-                "state" : {
-                  "revision" : "8.0.0",
-                  "version" : "8.0.0"
-                }
-              }
-            ],
-            "version" : 1
-          }
-          RESOLVED_EOF
-          
-          cd ../..
-          
           echo "Running pod install..."
           cd ios/App && pod install && cd ../..
           
           echo "=== Current directory structure ==="
           ls -la ios/App/
           
-          echo "=== Creating shared scheme ==="
+          echo "=== Creating shared scheme in the correct path ==="
+          # 注意：我们现在在项目根目录，需要创建 ios/App/App.xcodeproj 下的 scheme
           mkdir -p ios/App/App.xcodeproj/xcshareddata/xcschemes
           
           cat > ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme <<'SCHEME_EOF'
@@ -173,6 +147,7 @@ workflows:
           SCHEME_EOF
           
           echo "Scheme created at: ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme"
+          ls -la ios/App/App.xcodeproj/xcshareddata/xcschemes/
           
           echo "=== Creating Main.storyboard ==="
           mkdir -p ios/App/App/Base.lproj
@@ -280,7 +255,7 @@ workflows:
           echo "New build number: $NEW_BUILD_NUMBER"
           
           echo "Updating CFBundleVersion in Info.plist..."
-          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW_BUILD_NUMBER" App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW_BUILD_NUMBER" App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :CFBundleVersion string $NEW_BUILD_NUMBER" App/Info.plist
           
           echo "Updated Info.plist:"
           /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" App/Info.plist
@@ -315,9 +290,10 @@ workflows:
           
           echo "=== Verifying scheme exists ==="
           if [ -f "App.xcodeproj/xcshareddata/xcschemes/App.xcscheme" ]; then
-            echo "Scheme file found"
+            echo "Scheme file found at App.xcodeproj/xcshareddata/xcschemes/App.xcscheme"
+            cat App.xcodeproj/xcshareddata/xcschemes/App.xcscheme | head -20
           else
-            echo "ERROR: Scheme file not found!"
+            echo "ERROR: Scheme file not found at App.xcodeproj/xcshareddata/xcschemes/App.xcscheme"
             exit 1
           fi
           
@@ -335,7 +311,8 @@ workflows:
             -skipMacroValidation \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO
+            CODE_SIGNING_ALLOWED=NO \
+            | xcpretty || exit 1
           
           if [ $? -ne 0 ]; then
             echo "ERROR: Archive build failed"
@@ -357,6 +334,8 @@ workflows:
             <true/>
             <key>compileBitcode</key>
             <false/>
+            <key>teamID</key>
+            <string>${TEAM_ID:-}</string>
           </dict>
           </plist>
           EOF
@@ -372,7 +351,8 @@ workflows:
             -exportPath build/ios/ipa \
             -exportOptionsPlist exportOptions.plist \
             -allowProvisioningUpdates \
-            -verbose
+            -verbose \
+            | xcpretty
           
           if [ $? -ne 0 ]; then
             echo "ERROR: IPA export failed"
