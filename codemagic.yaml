@@ -28,7 +28,14 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
           npx cap sync ios
+          cd ios/App && pod install
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
