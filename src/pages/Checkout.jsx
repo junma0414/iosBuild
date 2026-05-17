@@ -358,17 +358,15 @@ export default function Checkout() {
             </div>
             <div>
               <p className="font-semibold text-foreground">
-                {ios ? "App Store In-App Purchase" : "Google Play Billing"}
+                {ios ? t("iapTitleApple") : t("iapTitleGoogle")}
               </p>
               <p className="text-xs text-muted-foreground">
-                {ios ? "Required by Apple" : "Required by Google"}
+                {ios ? t("iapRequiredByApple") : t("iapRequiredByGoogle")}
               </p>
             </div>
           </div>
           <p className="text-sm text-muted-foreground">
-            {ios
-              ? "Per Apple guidelines, subscriptions must be purchased through App Store. Tap below to subscribe."
-              : "Per Google guidelines, subscriptions must be purchased through Google Play. Tap below to subscribe."}
+            {ios ? t("iapGuidelineApple") : t("iapGuidelineGoogle")}
           </p>
           <Button
             className="w-full rounded-xl h-12 text-base font-semibold"
@@ -378,14 +376,14 @@ export default function Checkout() {
             {(isProcessing || revenueCatLoading) ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
-                {ios ? "正在连接App Store..." : "正在连接Google Play..."}
+                {ios ? t("iapConnectingApple") : t("iapConnectingGoogle")}
               </>
             ) : (
-              ios ? "通过App Store订阅" : "通过Google Play订阅"
+              ios ? t("iapSubscribeApple") : t("iapSubscribeGoogle")
             )}
           </Button>
           <p className="text-xs text-center text-muted-foreground">
-            {ios ? "Managed by Apple · Cancel anytime in Settings" : "Managed by Google · Cancel anytime in Play Store"}
+            {ios ? t("iapManageApple") : t("iapManageGoogle")}
           </p>
           <p className="text-xs text-center text-muted-foreground/60">
             SGD reference price. Actual charge in your local currency as set by {ios ? "App Store" : "Google Play"}.

@@ -10,8 +10,18 @@ import { base44 } from '../api/base44Client';
 
 import { GoogleSignIn } from 'capacitor-google-sign-in';
 
-
-
+const openLegalDoc = (path) => {
+  const isNative = isNativeApp();
+  const baseUrl = isNative
+    ? (import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud')
+    : window.location.origin;
+  const url = `${baseUrl}${path}`;
+  if (isNative && window.Capacitor?.Plugins?.Browser) {
+    window.Capacitor.Plugins.Browser.open({ url });
+  } else {
+    window.open(url, '_blank');
+  }
+};
 
 const getApiUrl = () => {
   if (window.Capacitor?.isNativePlatform?.()) {
@@ -387,112 +397,78 @@ const Login = () => {
   const handleGoogleLogin = async () => {
   console.log('📱 [handleGoogleLogin] started, loading:', loading);
   if (loading) return;
-  
+
   setLoading(true);
   setError('');
 
   const isNative = isNativeApp();
   console.log('📱 [handleGoogleLogin] isNative:', isNative);
 
-  if (isNative) {
+  // ========== Android Native: use capacitor-google-sign-in plugin ==========
+  if (isNative && isAndroid()) {
     try {
-      // ========== Native: capacitor-google-sign-in ==========
-      console.log('📱 [handleGoogleLogin] using capacitor-google-sign-in');
-
-      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-      if (!clientId) {
-        throw new Error('Google Client ID not configured');
-      }
-
       const result = await GoogleSignIn.handleSignInButton();
-      console.log('📱 [handleGoogleLogin] signIn result:', result);
+      const idToken = result.response.authorizationCode;
 
-      const idToken = result?.response?.identityToken || null;
-      const serverAuthCode = result?.response?.serverAuthCode || null;
-
-      if (idToken) {
-        console.log('📱 [handleGoogleLogin] using idToken');
-        // Send idToken to backend
-        const apiUrl = `${getApiUrl()}/auth/google`;
-        console.log('📱 [handleGoogleLogin] sending idToken to backend:', apiUrl);
-
-        const response = await fetch(apiUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken }),
-        });
-
-        const data = await response.json();
-        console.log('📱 [handleGoogleLogin] backend response status:', response.status);
-        console.log('📱 [handleGoogleLogin] has accessToken:', !!data.accessToken);
-
-        if (!response.ok) {
-          throw new Error(data.error || `Backend returned ${response.status}`);
-        }
-
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-          console.log('📱 [handleGoogleLogin] tokens saved, navigating to app...');
-          setLoading(false);
-          checkAuth();
-          navigate('/');
-          return;
-        } else {
-          throw new Error('No accessToken from backend');
-        }
-      } else if (serverAuthCode) {
-        console.log('📱 [handleGoogleLogin] no idToken, using serverAuthCode with backend exchange');
-        try {
-          const apiUrl = getApiUrl();
-          const response = await fetch(`${apiUrl}/auth/google/callback`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code: serverAuthCode }),
-          });
-
-          const data = await response.json();
-          console.log('📱 [handleGoogleLogin] callback response status:', response.status);
-
-          if (data.accessToken) {
-            localStorage.setItem('accessToken', data.accessToken);
-            if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-            console.log('📱 [handleGoogleLogin] tokens saved, navigating to app...');
-            setLoading(false);
-            checkAuth();
-            navigate('/');
-            return;
-          } else {
-            throw new Error(data.error || 'Failed to exchange server auth code');
-          }
-        } catch (exchangeErr) {
-          console.error('📱 [handleGoogleLogin] serverAuthCode exchange failed, falling back to OAuth redirect:', exchangeErr);
-        }
+      if (!idToken) {
+        throw new Error('No identity token received from Google');
       }
 
-      // Fallback: 如果 idToken 和 serverAuthCode 都失败，走 Web OAuth 重定向
-      console.log('📱 [handleGoogleLogin] falling back to OAuth redirect flow');
-      try {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId) throw new Error('Google Client ID not configured');
+      const apiUrl = getApiUrl();
+      const res = await fetch(`${apiUrl}/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ idToken }),
+      });
+      const data = await res.json();
 
-        const redirectUri = `${window.location.origin}/auth/google/callback`;
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&` +
-          `scope=email profile openid&` +
-          `access_type=online&` +
-          `prompt=select_account&` +
-          `state=${Date.now()}`;
+      if (!res.ok) {
+        throw new Error(data.error || 'Google login failed');
+      }
 
-        window.location.href = authUrl;
-      } catch (fallbackErr) {
-        console.error('📱 [handleGoogleLogin] fallback error:', fallbackErr);
-        throw new Error('Google login failed: unable to authenticate');
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+        checkAuth();
+        navigate('/');
+      } else {
+        throw new Error('No access token received from server');
       }
     } catch (err) {
-      console.error('📱 [handleGoogleLogin] capawesome error:', err);
+      console.log('📱 [Android Google Sign-In] error details:', JSON.stringify(err), 'message:', err.message);
+      if (err.message === 'USER_CANCELLED') {
+        console.log('📱 [Android Google Sign-In] user cancelled');
+      } else {
+        console.error('📱 [Android Google Sign-In] error:', err);
+        setError(err.message || 'Google login failed');
+      }
+    } finally {
+      setLoading(false);
+    }
+    return;
+  }
+
+  // ========== iOS Native: use Browser Custom Tab ==========
+  if (isNative) {
+    try {
+      const platform = 'ios';
+      const apiUrl = getApiUrl();
+
+      const response = await fetch(`${apiUrl}/auth/google/mobile-init?platform=${platform}`);
+      const data = await response.json();
+
+      if (!data.authUrl) {
+        throw new Error('Failed to get OAuth URL');
+      }
+
+      if (window.Capacitor?.Plugins?.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
+        setTimeout(() => { setLoading(false); }, 1000);
+      } else {
+        window.location.href = data.authUrl;
+      }
+    } catch (err) {
+      console.error('📱 [handleGoogleLogin] error:', err);
       setError(err.message || 'Google login failed');
       setLoading(false);
     }
@@ -821,23 +797,21 @@ const Login = () => {
                 />
                 <label htmlFor="agreeTerms" className="text-sm text-gray-600">
                   I agree to the{' '}
-                  <a 
-                    href="/terms" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
+                  <button 
+                    type="button"
+                    onClick={() => openLegalDoc('/terms')}
+                    className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 inline text-sm"
                   >
                     Terms of Service
-                  </a>{' '}
+                  </button>{' '}
                   and{' '}
-                  <a 
-                    href="/privacy" 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-primary hover:underline"
+                  <button 
+                    type="button"
+                    onClick={() => openLegalDoc('/privacy')}
+                    className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 inline text-sm"
                   >
                     Privacy Policy
-                  </a>
+                  </button>
                 </label>
               </div>
               {showTermsError && (
@@ -883,8 +857,8 @@ const Login = () => {
             </button>
           )}
 
-          {/* Apple 登录按钮 */}
-          {!isRegister && (
+          {/* Apple 登录按钮（仅 iOS 原生环境） */}
+          {!isRegister && !isAndroid() && isNativeApp() && isIOS() && (
             <button
               type="button"
               onClick={handleAppleLogin}
@@ -919,23 +893,21 @@ const Login = () => {
           <div className="mt-8 pt-6 border-t border-gray-200">
             <p className="text-center text-gray-600 text-sm">
               By continuing, you agree to our{' '}
-              <a 
-                href="/terms" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
+              <button 
+                type="button"
+                onClick={() => openLegalDoc('/terms')}
+                className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 inline text-sm"
               >
                 Terms of Service
-              </a>{' '}
+              </button>{' '}
               and{' '}
-              <a 
-                href="/privacy" 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-primary hover:underline"
+              <button 
+                type="button"
+                onClick={() => openLegalDoc('/privacy')}
+                className="text-primary hover:underline bg-transparent border-none cursor-pointer p-0 inline text-sm"
               >
                 Privacy Policy
-              </a>
+              </button>
             </p>
           </div>
         )}

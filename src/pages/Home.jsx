@@ -533,11 +533,14 @@ const fetchUserStats = async () => {
   // iOS WKWebView 兼容：使用 Capacitor Browser 打开法律文档链接
   const openLegalLink = (path) => {
     const isNative = isNativeApp();
+    const baseUrl = isNative
+      ? (import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud')
+      : window.location.origin;
+    const url = `${baseUrl}${path}`;
     if (isNative && window.Capacitor?.Plugins?.Browser) {
-      const url = `${window.location.origin}${path}`;
       window.Capacitor.Plugins.Browser.open({ url });
     } else {
-      window.open(path, '_blank');
+      window.open(url, '_blank');
     }
   };
 

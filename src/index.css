@@ -110,7 +110,9 @@ button, a, svg {
 /* Mobile safe area helpers */
 .safe-top {
   padding-top: env(safe-area-inset-top, 0px);
-  height: calc(3.5rem + env(safe-area-inset-top, 0px));
+}
+.content-with-header {
+  padding-top: 3.5rem;
 }
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);

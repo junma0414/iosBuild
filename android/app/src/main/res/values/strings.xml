@@ -4,4 +4,5 @@
     <string name="title_activity_main">LinguMate</string>
     <string name="package_name">com.lingumate.app</string>
     <string name="custom_url_scheme">com.lingumate.app</string>
+    <string name="google_auth_client_id">925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com</string>
 </resources>

@@ -217,13 +217,6 @@ export function getUserPaymentPlatform(user) {
 
   // 检测支付平台
 export function getPaymentPlatform(forceRefresh = false) {
-  // 🔴 临时强制：如果是 Android 环境，直接返回 googleplay
-  if (typeof navigator !== 'undefined' && /Android/.test(navigator.userAgent)) {
-    console.log('⚠️ 强制返回 googleplay (Android)');
-    return 'googleplay';
-  }
-  
-  // 原有逻辑...
   const native = isNativeApp();
   console.log('⚠️ is native:', native);
 

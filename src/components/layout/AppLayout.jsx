@@ -29,7 +29,7 @@ export default function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
       {/* Mobile header — always visible, shows screen title */}
-      <header className="fixed top-0 left-0 right-0 z-40 md:hidden bg-card/95 backdrop-blur-lg border-b border-border flex items-center h-14 px-3 gap-2 safe-top">
+      <header className="fixed top-0 left-0 right-0 z-40 md:hidden bg-card/95 backdrop-blur-lg border-b border-border flex items-center h-14 px-3 gap-2">
         <button
           onClick={() => setSidebarOpen(true)}
           className="p-1.5 rounded-xl hover:bg-secondary transition-colors shrink-0"
@@ -62,7 +62,7 @@ export default function AppLayout() {
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: -20 }}
             transition={{ duration: 0.18, ease: "easeInOut" }}
-            className="p-4 pt-[60px] md:pt-4 md:p-8 pb-20 md:pb-8 max-w-6xl mx-auto"
+            className="p-4 content-with-header md:pt-4 md:p-8 pb-20 md:pb-8 max-w-6xl mx-auto"
           >
             <Outlet />
           </motion.div>
