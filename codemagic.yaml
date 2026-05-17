@@ -17,28 +17,105 @@ workflows:
 
     scripts:
       - name: Install npm dependencies
-        script: npm ci
+        script: |
+          echo "=== Installing npm dependencies ==="
+          npm ci
+          echo "npm dependencies installed successfully"
 
       - name: Build web assets
         script: |
+          echo "=== Building web assets ==="
           cp .env.production .env
           NODE_ENV=production npm run build
+          echo "Web assets built successfully"
+          ls -la dist/ || echo "dist directory not found"
 
       - name: Setup iOS project
         script: |
+          echo "=== Setting up iOS project ==="
+          
+          echo "Removing existing ios directory..."
           rm -rf ios
+          
+          echo "Adding iOS platform with Capacitor..."
           npx cap add ios
+          
+          echo "Creating Podfile..."
           mkdir -p ios/App
           cat > ios/App/Podfile <<EOF
           platform :ios, '14.0'
           target 'App' do
           end
           EOF
+          cat ios/App/Podfile
+          
+          echo "Running cap sync ios..."
           npx cap sync ios
+          
+          echo "Running pod install..."
           cd ios/App && pod install
+          cd ../..
+          
+          echo "=== Current directory structure ==="
           ls -la ios/App/
-
-          # 创建正确的 Main.storyboard
+          
+          echo "=== Creating shared scheme ==="
+          mkdir -p ios/App/App.xcodeproj/xcshareddata/xcschemes
+          
+          # 使用固定的 BlueprintIdentifier（标准的 Capacitor iOS 项目 ID）
+          cat > ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme <<'SCHEME_EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <Scheme LastUpgradeVersion="1510" version="1.7">
+            <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES">
+              <BuildActionEntries>
+                <BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">
+                  <BuildableReference
+                    BuildableIdentifier = "primary"
+                    BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
+                    BuildableName = "App.app"
+                    BlueprintName = "App"
+                    ReferencedContainer = "container:App.xcodeproj">
+                  </BuildableReference>
+                </BuildActionEntry>
+              </BuildActionEntries>
+            </BuildAction>
+            <TestAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv = "YES">
+              <Testables>
+              </Testables>
+            </TestAction>
+            <LaunchAction buildConfiguration = "Debug" selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB" launchStyle = "0" useCustomWorkingDirectory = "NO" ignoresPersistentStateOnLaunch = "NO" debugDocumentVersioning = "YES" debugServiceExtension = "internal" allowLocationSimulation = "YES">
+              <BuildableProductRunnable runnableDebuggingMode = "0">
+                <BuildableReference
+                  BuildableIdentifier = "primary"
+                  BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
+                  BuildableName = "App.app"
+                  BlueprintName = "App"
+                  ReferencedContainer = "container:App.xcodeproj">
+                </BuildableReference>
+              </BuildableProductRunnable>
+            </LaunchAction>
+            <ProfileAction buildConfiguration = "Release" shouldUseLaunchSchemeArgsEnv = "YES" savedToolIdentifier = "" useCustomWorkingDirectory = "NO" debugDocumentVersioning = "YES">
+              <BuildableProductRunnable runnableDebuggingMode = "0">
+                <BuildableReference
+                  BuildableIdentifier = "primary"
+                  BlueprintIdentifier = "13B07F861A680F5B00A75B9A"
+                  BuildableName = "App.app"
+                  BlueprintName = "App"
+                  ReferencedContainer = "container:App.xcodeproj">
+                </BuildableReference>
+              </BuildableProductRunnable>
+            </ProfileAction>
+            <AnalyzeAction buildConfiguration = "Debug">
+            </AnalyzeAction>
+            <ArchiveAction buildConfiguration = "Release" revealArchiveInOrganizer = "YES">
+            </ArchiveAction>
+          </Scheme>
+          SCHEME_EOF
+          
+          echo "Scheme created at: ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme"
+          cat ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme
+          
+          echo "=== Creating Main.storyboard ==="
           mkdir -p ios/App/App/Base.lproj
           cat > ios/App/App/Base.lproj/Main.storyboard <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
@@ -57,7 +134,7 @@ workflows:
           </document>
           EOF
           
-          # 创建正确的 LaunchScreen.storyboard
+          echo "=== Creating LaunchScreen.storyboard ==="
           cat > ios/App/App/Base.lproj/LaunchScreen.storyboard <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
@@ -94,9 +171,11 @@ workflows:
           </document>
           EOF
           
-          /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist
+          echo "=== Updating Info.plist ==="
+          /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist 2>/dev/null || echo "Warning: Could not set UILaunchStoryboardName"
+          /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist 2>/dev/null || echo "Warning: Could not set UIMainStoryboardFile"
           
+          echo "=== Creating AppDelegate.swift ==="
           cat > ios/App/App/AppDelegate.swift <<'EOF'
           import UIKit
           import Capacitor
@@ -123,41 +202,137 @@ workflows:
               }
           }
           EOF
+          
+          echo "=== Final iOS project structure ==="
+          find ios/App -type f -name "*.swift" -o -name "*.storyboard" -o -name "*.plist" -o -name "*.xcscheme" | head -20
+          
+          echo "iOS project setup completed"
 
       - name: Increment build number
         script: |
+          echo "=== Incrementing build number ==="
           cd ios/App
+          
+          echo "Getting latest TestFlight build number..."
           LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "6767740956" 2>/dev/null || echo "0")
-          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
           echo "Latest TestFlight build number: $LATEST_BUILD_NUMBER"
+          
+          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
           echo "New build number: $NEW_BUILD_NUMBER"
-          agvtool new-version -all $NEW_BUILD_NUMBER
+          
+          echo "Updating CFBundleVersion in Info.plist..."
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $NEW_BUILD_NUMBER" App/Info.plist
+          
+          echo "Updated Info.plist:"
+          /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" App/Info.plist
+          
+          cd ../..
 
       - name: Configure code signing
         script: |
+          echo "=== Configuring code signing ==="
+          echo "Adding certificates to keychain..."
           keychain add-certificates
+          
+          echo "Using provisioning profiles..."
           xcode-project use-profiles
+          
+          echo "Code signing configured"
 
       - name: Build and export IPA
         script: |
+          echo "=== Starting IPA build process ==="
           cd ios/App
-          # 检查并使用 workspace
-          if [ -d "CapApp-SPM.xcworkspace" ]; then
-            echo "Building with workspace: CapApp-SPM.xcworkspace"
-            xcode-project build-ipa \
-              --workspace "CapApp-SPM.xcworkspace" \
-              --scheme "$XCODE_SCHEME"
-          elif [ -d "App.xcworkspace" ]; then
-            echo "Building with workspace: App.xcworkspace"
-            xcode-project build-ipa \
-              --workspace "App.xcworkspace" \
-              --scheme "$XCODE_SCHEME"
+          
+          echo "Current directory: $(pwd)"
+          echo "=== Listing project contents ==="
+          ls -la
+          
+          echo "=== Checking project.pbxproj ==="
+          ls -la App.xcodeproj/
+          
+          echo "=== Checking schemes ==="
+          find . -name "*.xcscheme" -type f
+          
+          echo "=== Verifying scheme exists ==="
+          if [ -f "App.xcodeproj/xcshareddata/xcschemes/App.xcscheme" ]; then
+            echo "Scheme file found"
+            cat App.xcodeproj/xcshareddata/xcschemes/App.xcscheme | head -20
           else
-            echo "Building with project: App.xcodeproj"
-            xcode-project build-ipa \
-              --project "App.xcodeproj" \
-              --scheme "$XCODE_SCHEME"
+            echo "ERROR: Scheme file not found!"
+            exit 1
           fi
+          
+          echo "=== Listing available schemes with xcodebuild ==="
+          xcodebuild -project App.xcodeproj -list
+          
+          echo "=== Building archive ==="
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -archivePath build/App.xcarchive \
+            -configuration Release \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            -verbose
+          
+          if [ $? -ne 0 ]; then
+            echo "ERROR: Archive build failed"
+            exit 1
+          fi
+          
+          echo "Archive built successfully at: build/App.xcarchive"
+          ls -la build/
+          
+          echo "=== Creating export options plist ==="
+          cat > exportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>uploadSymbols</key>
+            <true/>
+            <key>compileBitcode</key>
+            <false/>
+          </dict>
+          </plist>
+          EOF
+          
+          echo "Export options:"
+          cat exportOptions.plist
+          
+          echo "=== Exporting IPA ==="
+          mkdir -p build/ios/ipa
+          
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist exportOptions.plist \
+            -allowProvisioningUpdates \
+            -verbose
+          
+          if [ $? -ne 0 ]; then
+            echo "ERROR: IPA export failed"
+            exit 1
+          fi
+          
+          echo "=== Checking exported IPA ==="
+          ls -la build/ios/ipa/
+          
+          if [ -f "build/ios/ipa/App.ipa" ]; then
+            echo "SUCCESS: IPA file created at build/ios/ipa/App.ipa"
+            ls -lh build/ios/ipa/App.ipa
+          else
+            echo "ERROR: IPA file not found!"
+            find build -name "*.ipa" -type f
+            exit 1
+          fi
+          
+          echo "IPA build completed successfully"
+          cd ../..
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
