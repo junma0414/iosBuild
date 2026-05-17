@@ -141,9 +141,23 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
-          xcode-project build-ipa \
-            --project "App.xcodeproj" \
-            --scheme "$XCODE_SCHEME"
+          # 检查并使用 workspace
+          if [ -d "CapApp-SPM.xcworkspace" ]; then
+            echo "Building with workspace: CapApp-SPM.xcworkspace"
+            xcode-project build-ipa \
+              --workspace "CapApp-SPM.xcworkspace" \
+              --scheme "$XCODE_SCHEME"
+          elif [ -d "App.xcworkspace" ]; then
+            echo "Building with workspace: App.xcworkspace"
+            xcode-project build-ipa \
+              --workspace "App.xcworkspace" \
+              --scheme "$XCODE_SCHEME"
+          else
+            echo "Building with project: App.xcodeproj"
+            xcode-project build-ipa \
+              --project "App.xcodeproj" \
+              --scheme "$XCODE_SCHEME"
+          fi
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
