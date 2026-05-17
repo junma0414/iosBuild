@@ -39,7 +39,6 @@ workflows:
 
           # 修复 SPM 依赖冲突 - 统一 capacitor-swift-pm 版本为 8.x
           cd ios/App
-          # 创建 Package.resolved 锁定版本
           mkdir -p App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
           cat > App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved <<'RESOLVED'
           {
@@ -162,9 +161,40 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
-          xcode-project build-ipa \
-            --project "App.xcodeproj" \
-            --scheme "$XCODE_SCHEME"
+          
+          # 使用 xcodebuild 替代 xcode-project build-ipa
+          echo "Building archive..."
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -archivePath build/App.xcarchive \
+            -configuration Release \
+            -destination generic/platform=iOS \
+            CODE_SIGN_IDENTITY="iPhone Distribution" \
+            CODE_SIGNING_REQUIRED=YES \
+            CODE_SIGNING_ALLOWED=YES \
+            OTHER_CODE_SIGN_FLAGS="--keychain $(pwd)/../../keychain.keychain" \
+            -allowProvisioningUpdates
+          
+          echo "Exporting IPA..."
+          xcodebuild -exportArchive \
+            -archivePath build/App.xcarchive \
+            -exportPath build/ios/ipa \
+            -exportOptionsPlist <(cat <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key>
+            <string>app-store</string>
+            <key>teamID</key>
+            <string>\$TEAM_ID</string>
+            <key>uploadSymbols</key>
+            <true/>
+          </dict>
+          </plist>
+          EOF
+          ) -allowProvisioningUpdates
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
