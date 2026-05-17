@@ -22,6 +22,29 @@ workflows:
           npm ci
           echo "npm dependencies installed successfully"
 
+      - name: Fix dependency conflicts
+        script: |
+          echo "=== Fixing Capacitor dependency conflicts ==="
+          
+          # 统一 Capacitor 版本到 7.x
+          echo "Updating Capacitor core to version 7..."
+          npm install @capacitor/core@7 @capacitor/ios@7 @capacitor/cli@7
+          
+          # 更新 plugins 到兼容版本
+          echo "Updating Capacitor plugins..."
+          npm install @capacitor/app@7 @capacitor/haptics@7 @capacitor/keyboard@7 @capacitor/status-bar@7
+          
+          # 更新 purchases-capacitor 到支持 Capacitor 7 的版本
+          echo "Updating purchases-capacitor..."
+          npm install purchases-capacitor@latest
+          
+          # 检查 apple-sign-in 的兼容性
+          echo "Updating apple-sign-in..."
+          npm install @capacitor-community/apple-sign-in@latest
+          
+          echo "Updated dependencies:"
+          npm list @capacitor/core @capacitor/ios purchases-capacitor || true
+
       - name: Build web assets
         script: |
           echo "=== Building web assets ==="
@@ -42,19 +65,57 @@ workflows:
           
           echo "Creating Podfile..."
           mkdir -p ios/App
-          cat > ios/App/Podfile <<EOF
+          cat > ios/App/Podfile <<'EOF'
           platform :ios, '14.0'
+          
           target 'App' do
+            use_frameworks! :linkage => :static
+            
+            # CocoaPods 依赖
+            pod 'Capacitor', :git => 'https://github.com/ionic-team/capacitor.git', :tag => '7.0.0'
+            pod 'CapacitorCordova', :git => 'https://github.com/ionic-team/capacitor.git', :tag => '7.0.0'
+          end
+          
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '14.0'
+                config.build_settings['ENABLE_BITCODE'] = 'NO'
+              end
+            end
           end
           EOF
+          
           cat ios/App/Podfile
           
           echo "Running cap sync ios..."
           npx cap sync ios
           
-          echo "Running pod install..."
-          cd ios/App && pod install
+          echo "Creating Package.resolved to resolve SPM conflicts..."
+          cd ios/App
+          mkdir -p App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm
+          
+          cat > App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved <<'RESOLVED_EOF'
+          {
+            "pins" : [
+              {
+                "identity" : "capacitor-swift-pm",
+                "kind" : "remoteSourceControl",
+                "location" : "https://github.com/ionic-team/capacitor-swift-pm",
+                "state" : {
+                  "revision" : "8.0.0",
+                  "version" : "8.0.0"
+                }
+              }
+            ],
+            "version" : 1
+          }
+          RESOLVED_EOF
+          
           cd ../..
+          
+          echo "Running pod install..."
+          cd ios/App && pod install && cd ../..
           
           echo "=== Current directory structure ==="
           ls -la ios/App/
@@ -62,7 +123,6 @@ workflows:
           echo "=== Creating shared scheme ==="
           mkdir -p ios/App/App.xcodeproj/xcshareddata/xcschemes
           
-          # 使用固定的 BlueprintIdentifier（标准的 Capacitor iOS 项目 ID）
           cat > ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme <<'SCHEME_EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <Scheme LastUpgradeVersion="1510" version="1.7">
@@ -113,7 +173,6 @@ workflows:
           SCHEME_EOF
           
           echo "Scheme created at: ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme"
-          cat ios/App/App.xcodeproj/xcshareddata/xcschemes/App.xcscheme
           
           echo "=== Creating Main.storyboard ==="
           mkdir -p ios/App/App/Base.lproj
@@ -172,8 +231,8 @@ workflows:
           EOF
           
           echo "=== Updating Info.plist ==="
-          /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist 2>/dev/null || echo "Warning: Could not set UILaunchStoryboardName"
-          /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist 2>/dev/null || echo "Warning: Could not set UIMainStoryboardFile"
+          /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UILaunchStoryboardName string LaunchScreen" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist 2>/dev/null || /usr/libexec/PlistBuddy -c "Add :UIMainStoryboardFile string Main" ios/App/App/Info.plist
           
           echo "=== Creating AppDelegate.swift ==="
           cat > ios/App/App/AppDelegate.swift <<'EOF'
@@ -257,14 +316,13 @@ workflows:
           echo "=== Verifying scheme exists ==="
           if [ -f "App.xcodeproj/xcshareddata/xcschemes/App.xcscheme" ]; then
             echo "Scheme file found"
-            cat App.xcodeproj/xcshareddata/xcschemes/App.xcscheme | head -20
           else
             echo "ERROR: Scheme file not found!"
             exit 1
           fi
           
           echo "=== Listing available schemes with xcodebuild ==="
-          xcodebuild -project App.xcodeproj -list
+          xcodebuild -project App.xcodeproj -list || true
           
           echo "=== Building archive ==="
           xcodebuild archive \
@@ -272,10 +330,12 @@ workflows:
             -scheme App \
             -archivePath build/App.xcarchive \
             -configuration Release \
+            -verbose \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
-            -verbose
+            CODE_SIGNING_ALLOWED=NO
           
           if [ $? -ne 0 ]; then
             echo "ERROR: Archive build failed"
