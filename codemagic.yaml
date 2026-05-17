@@ -35,6 +35,12 @@ workflows:
           end
           EOF
           npx cap sync ios
+          
+          # 修复 SPM 依赖冲突 - 将 apple-sign-in 的版本要求从 7.x 改为 8.x
+          cd ios/App
+          sed -i '' 's/7\.0\.0\.\.<8\.0\.0/8.0.0..<9.0.0/g' App.xcodeproj/project.pbxproj
+          cd ../..
+          
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
@@ -140,39 +146,9 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
-          
-          # 删除损坏的 Package.resolved 文件
-          rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
-          rm -f App.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/package.resolved
-          
-          # 使用 xcodebuild 构建
-          xcodebuild archive \
-            -project App.xcodeproj \
-            -scheme App \
-            -archivePath build/App.xcarchive \
-            -configuration Release \
-            -allowProvisioningUpdates
-          
-          # 创建 exportOptions.plist 文件
-          cat > exportOptions.plist <<EOF
-          <?xml version="1.0" encoding="UTF-8"?>
-          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-          <plist version="1.0">
-          <dict>
-            <key>method</key>
-            <string>app-store</string>
-            <key>uploadSymbols</key>
-            <true/>
-          </dict>
-          </plist>
-          EOF
-          
-          # 导出 IPA
-          xcodebuild -exportArchive \
-            -archivePath build/App.xcarchive \
-            -exportPath build/ios/ipa \
-            -exportOptionsPlist exportOptions.plist \
-            -allowProvisioningUpdates
+          xcode-project build-ipa \
+            --project "App.xcodeproj" \
+            --scheme "$XCODE_SCHEME"
 
     artifacts:
       - ios/App/build/ios/ipa/*.ipa
