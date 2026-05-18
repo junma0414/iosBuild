@@ -13,7 +13,8 @@ const openLegalDoc = (path) => {
   const baseUrl = isNative
     ? (import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud')
     : window.location.origin;
-  const url = `${baseUrl}${path}`;
+  const lang = localStorage.getItem("ui_language") || 'en';
+  const url = `${baseUrl}${path}?lang=${lang}`;
   if (isNative && window.Capacitor?.Plugins?.Browser) {
     window.Capacitor.Plugins.Browser.open({ url });
   } else {

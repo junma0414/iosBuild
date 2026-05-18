@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLanguage } from "../../lib/LanguageContext";
 import { SUPPORTED_LANGUAGES, LEARNING_LANGUAGES } from "../../lib/i18n";
 import { ScrollArea } from "../../components/ui/scroll-area";
@@ -73,14 +73,11 @@ export default function LanguageSwitcher({ type = "ui" }) {
   }, []);
 
   const handleSelectLanguage = (code) => {
-    if (selectedRef.current) return;
-    selectedRef.current = true;
     setter(code);
     setDrawerOpen(false);
-    setTimeout(() => { selectedRef.current = false; }, 300);
   };
 
-  const currentLang = languages.find(l => l.code === current);
+  const currentLang = useMemo(() => languages.find(l => l.code === current), [languages, current]);
 
   if (isMobile) {
     return (
