@@ -425,7 +425,7 @@ const Login = () => {
         if (!clientId) throw new Error('Google Client ID not configured');
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud'}/auth/google/callback`)}&` +
+          `redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_API_URL || 'https://lang.omnifamily.cloud/api'}/auth/google/callback`)}&` +
           `response_type=code&` +
           `scope=email profile openid&` +
           `access_type=offline&` +
