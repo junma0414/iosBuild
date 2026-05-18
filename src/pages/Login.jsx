@@ -357,15 +357,17 @@ const Login = () => {
       }
 
       if (!googleAuthInstance) {
-        await new Promise((resolve, reject) => {
-          const script = document.createElement('script');
-          script.src = 'https://accounts.google.com/gsi/client';
-          script.async = true;
-          script.defer = true;
-          script.onload = resolve;
-          script.onerror = () => reject(new Error('Failed to load Google Sign-In SDK'));
-          document.head.appendChild(script);
-        });
+        if (typeof google === 'undefined' || !google.accounts) {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            script.defer = true;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
+        }
 
         googleAuthInstance = google.accounts.oauth2.initCodeClient({
           client_id: clientId,
@@ -417,8 +419,28 @@ const Login = () => {
       setTimeout(() => setLoading(false), 15000);
     } catch (err) {
       console.error('Google login error:', err);
-      setError(err.message || 'Google login failed');
-      setLoading(false);
+      // GIS failed, fall back to Capacitor Browser auth
+      try {
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId) throw new Error('Google Client ID not configured');
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud'}/auth/google/callback`)}&` +
+          `response_type=code&` +
+          `scope=email profile openid&` +
+          `access_type=offline&` +
+          `prompt=select_account`;
+        if (window.Capacitor?.Plugins?.Browser) {
+          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
+          setTimeout(() => setLoading(false), 15000);
+        } else {
+          window.location.href = authUrl;
+        }
+      } catch (fallbackErr) {
+        console.error('Google login fallback error:', fallbackErr);
+        setError(err.message || 'Google login failed');
+        setLoading(false);
+      }
     }
   };
 
