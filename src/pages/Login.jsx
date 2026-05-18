@@ -30,6 +30,7 @@ const getApiUrl = () => {
 
 let googleSDKLoaded = false;
 let googleSDKInitializing = false;
+let googleAuthInstance = null;
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -291,21 +292,6 @@ const Login = () => {
     }
   };
 
-  // 监听 Capacitor Browser 关闭后检查 token
-  const browserFinishedRef = useRef(null);
-  useEffect(() => {
-    if (!isNativeApp() || !window.Capacitor?.Plugins?.Browser) return;
-    const handler = () => {
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        checkAuth();
-        navigate('/');
-      }
-    };
-    window.Capacitor.Plugins.Browser.addListener('browserFinished', handler);
-    return () => { window.Capacitor.Plugins.Browser.removeAllListeners(); };
-  }, []);
-
   const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
@@ -313,13 +299,10 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (Android & iOS): try native plugin ==========
+    // ========== Native (Android & iOS): try native Capacitor plugin ==========
     if (isNative) {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
-        if (isIOS()) {
-          GoogleSignIn.initialize();
-        }
         const result = await GoogleSignIn.handleSignInButton();
         const idToken = result.response.authorizationCode;
 
@@ -354,18 +337,17 @@ const Login = () => {
           setLoading(false);
           return;
         }
-        if (err.message?.includes('unimplemented') || err.message?.includes('not implemented')) {
-          console.log('Google Sign-In native plugin not available, using web OAuth flow');
-        } else {
+        if (!err.message?.includes('unimplemented') && !err.message?.includes('not implemented')) {
           console.error('Google Sign-In native error:', err);
           setError(err.message || 'Google login failed');
           setLoading(false);
           return;
         }
+        console.log('Google Sign-In native plugin not available, falling back to GIS popup');
       }
     }
 
-    // ========== Web / OAuth redirect (fallback for all platforms) ==========
+    // ========== Google Identity Services (GIS) popup (works in-app WebView, no browser switch) ==========
     try {
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
@@ -374,24 +356,65 @@ const Login = () => {
         return;
       }
 
-      const redirectUri = isNative
-        ? `${import.meta.env.VITE_API_URL || 'https://lang.omnifamily.cloud/api'}/auth/google/callback`
-        : `${window.location.origin}/auth/google/callback`;
+      if (!googleAuthInstance) {
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script');
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          script.onload = resolve;
+          script.onerror = () => reject(new Error('Failed to load Google Sign-In SDK'));
+          document.head.appendChild(script);
+        });
 
-      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${clientId}&` +
-        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-        `response_type=code&` +
-        `scope=email profile openid&` +
-        `access_type=offline&` +
-        `prompt=select_account`;
+        googleAuthInstance = google.accounts.oauth2.initCodeClient({
+          client_id: clientId,
+          scope: 'email profile openid',
+          ux_mode: 'popup',
+          callback: async (response) => {
+            if (response.error) {
+              setError(response.error_description || response.error || 'Google login failed');
+              setLoading(false);
+              return;
+            }
 
-      if (isNative && window.Capacitor?.Plugins?.Browser) {
-        await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-        setTimeout(() => setLoading(false), 15000);
-      } else {
-        window.location.href = authUrl;
+            try {
+              const apiUrl = getApiUrl();
+              const res = await fetch(`${apiUrl}/auth/google/callback`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: response.code }),
+              });
+              const data = await res.json();
+
+              if (!res.ok) {
+                throw new Error(data.error || 'Google login failed');
+              }
+
+              if (data.accessToken) {
+                localStorage.setItem('accessToken', data.accessToken);
+                if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+                checkAuth();
+                navigate('/');
+              } else {
+                throw new Error('No access token received from server');
+              }
+            } catch (err) {
+              console.error('Google login error:', err);
+              setError(err.message || 'Google login failed');
+              setLoading(false);
+            }
+          },
+          error_callback: (err) => {
+            console.error('GIS error:', err);
+            setError(err.message || 'Google login failed');
+            setLoading(false);
+          },
+        });
       }
+
+      googleAuthInstance.requestCode();
+      setTimeout(() => setLoading(false), 15000);
     } catch (err) {
       console.error('Google login error:', err);
       setError(err.message || 'Google login failed');
