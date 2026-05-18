@@ -4,12 +4,12 @@ import { PrivacyPolicy } from '../components/TermsAndPrivacy';
 import { useLanguage } from '../lib/LanguageContext';
 
 export default function PrivacyPage() {
-  const { uiLanguage } = useLanguage();
+  const lang = localStorage.getItem("ui_language") || 'en';
 
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto py-8 px-4">
-        <PrivacyPolicy language={'en'} />
+        <PrivacyPolicy language={lang} />
       </div>
     </div>
   );
