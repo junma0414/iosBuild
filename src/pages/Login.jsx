@@ -410,8 +410,7 @@ const Login = () => {
 
       const isNative = isNativeApp();
       const apiUrl = getApiUrl();
-      const platform = isNative ? (isIOS() ? 'ios' : 'android') : 'web';
-      const response = await fetch(`${apiUrl}/auth/apple/init?platform=${platform}`, {
+      const response = await fetch(`${apiUrl}/auth/apple/init`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -423,7 +422,7 @@ const Login = () => {
 
       if (isNative && window.Capacitor?.Plugins?.Browser) {
         await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
-        setTimeout(() => setLoading(false), 1000);
+        setTimeout(() => setLoading(false), 15000);
       } else {
         window.location.href = data.authUrl;
       }
