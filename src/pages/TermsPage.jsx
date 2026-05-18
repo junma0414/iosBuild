@@ -9,7 +9,7 @@ export default function TermsPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto py-8 px-4">
-        <TermsOfService language={uiLanguage} />
+        <TermsOfService language={'en'} />
       </div>
     </div>
   );

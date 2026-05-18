@@ -9,7 +9,7 @@ export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto py-8 px-4">
-        <PrivacyPolicy language={uiLanguage} />
+        <PrivacyPolicy language={'en'} />
       </div>
     </div>
   );

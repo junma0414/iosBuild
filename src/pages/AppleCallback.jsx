@@ -60,10 +60,11 @@ const AppleCallback = () => {
             throw new Error(data.error || 'Apple login failed');
           }
         } else if (code) {
+          const redirectUri = window.location.origin + '/auth/apple/callback';
           const response = await fetch(`${apiUrl}/auth/apple/callback`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code, fullName }),
+            body: JSON.stringify({ code, fullName, redirect_uri: redirectUri }),
           });
 
           const data = await response.json();

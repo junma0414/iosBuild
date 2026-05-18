@@ -7,7 +7,6 @@ import { Chrome, Apple, Mail } from 'lucide-react';
 import { isNativeApp, isIOS, isAndroid } from '../lib/planUtils';
 import { base44 } from '../api/base44Client';
 
-import { GoogleSignIn } from 'capacitor-google-sign-in';
 
 const openLegalDoc = (path) => {
   const isNative = isNativeApp();
@@ -63,7 +62,7 @@ const Login = () => {
     const handleOpenUrl = async (event) => {
       const url = event?.url || '';
 
-      // Apple OAuth callback
+      // Apple OAuth callback (native: custom scheme with query params)
       if (url.startsWith('com.lingumate.omnifamily://auth/apple/callback')) {
         const appleCode = url.match(/[?&]code=([^&]+)/);
         const appleIdToken = url.match(/[?&]id_token=([^&]+)/);
@@ -76,7 +75,10 @@ const Login = () => {
               body = JSON.stringify({ identityToken: decodeURIComponent(appleIdToken[1]) });
             } else {
               endpoint = `${apiUrl}/auth/apple/callback`;
-              body = JSON.stringify({ code: decodeURIComponent(appleCode[1]) });
+              body = JSON.stringify({
+                code: decodeURIComponent(appleCode[1]),
+                redirect_uri: 'com.lingumate.omnifamily://auth/apple/callback',
+              });
             }
             const response = await fetch(endpoint, {
               method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
@@ -296,9 +298,14 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (Android & iOS): use capacitor-google-sign-in plugin ==========
+    // ========== Native (iOS): use web OAuth redirect via Capacitor Browser ==========
+    // ========== Native (Android): try native plugin, fallback to web OAuth ==========
     if (isNative) {
       try {
+        if (isIOS()) {
+          throw new Error('USE_WEB_FLOW');
+        }
+        const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
         const idToken = result.response.authorizationCode;
 
@@ -326,20 +333,24 @@ const Login = () => {
         } else {
           throw new Error('No access token received from server');
         }
+        return;
       } catch (err) {
         if (err.message === 'USER_CANCELLED') {
           console.log('Google Sign-In cancelled by user');
-        } else {
-          console.error('Google Sign-In error:', err);
-          setError(err.message || 'Google login failed');
+          setLoading(false);
+          return;
         }
-      } finally {
-        setLoading(false);
+        if (err.message !== 'USE_WEB_FLOW' && !err.message?.includes('not implemented')) {
+          console.error('Google Sign-In native error:', err);
+          setError(err.message || 'Google login failed');
+          setLoading(false);
+          return;
+        }
+        console.log('Native Google Sign-In not available, falling back to web OAuth flow');
       }
-      return;
     }
 
-    // ========== Web: OAuth redirect ==========
+    // ========== Web / OAuth redirect (used for web and as fallback for native) ==========
     try {
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
@@ -348,7 +359,14 @@ const Login = () => {
         return;
       }
 
-      const redirectUri = `${window.location.origin}/auth/google/callback`;
+      let redirectUri;
+      let state = Date.now().toString();
+      if (isNative) {
+        redirectUri = `${import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud'}/auth/google/callback`;
+        state = 'app_login';
+      } else {
+        redirectUri = `${window.location.origin}/auth/google/callback`;
+      }
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${clientId}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
@@ -356,9 +374,14 @@ const Login = () => {
         `scope=email profile openid&` +
         `access_type=online&` +
         `prompt=select_account&` +
-        `state=${Date.now()}`;
+        `state=${state}`;
 
-      window.location.href = authUrl;
+      if (isNative && window.Capacitor?.Plugins?.Browser) {
+        await window.Capacitor.Plugins.Browser.open({ url: authUrl });
+        setTimeout(() => setLoading(false), 1000);
+      } else {
+        window.location.href = authUrl;
+      }
     } catch (err) {
       console.error('Google login error:', err);
       setError(err.message || 'Google login failed');
@@ -379,8 +402,10 @@ const Login = () => {
         return;
       }
 
+      const isNative = isNativeApp();
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/auth/apple/init`, {
+      const platform = isNative ? (isIOS() ? 'ios' : 'android') : 'web';
+      const response = await fetch(`${apiUrl}/auth/apple/init?platform=${platform}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -390,7 +415,6 @@ const Login = () => {
         throw new Error('Failed to get Apple OAuth URL');
       }
 
-      const isNative = isNativeApp();
       if (isNative && window.Capacitor?.Plugins?.Browser) {
         await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
         setTimeout(() => setLoading(false), 1000);
@@ -537,7 +561,7 @@ const Login = () => {
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   placeholder="Enter your email"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition mb-4"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition mb-4 text-base"
                   required
                 />
                 {resetError && (
@@ -580,7 +604,7 @@ const Login = () => {
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
                 placeholder="Enter your full name"
                 required
               />
@@ -595,7 +619,7 @@ const Login = () => {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
               placeholder="Enter your email"
               required
             />
@@ -609,7 +633,7 @@ const Login = () => {
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
               placeholder="Enter your password"
               required
               minLength={6}

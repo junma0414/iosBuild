@@ -213,8 +213,7 @@ export default function Checkout() {
       console.log('🔴 handlePayment called with paymentPlatform:', paymentPlatform);
       console.log('🔴 revenueCatAvailable:', revenueCatAvailable, 'revenueCatInitialized:', revenueCatInitialized);
       
-      if (paymentPlatform === 'stripe' || (nativeApp && !revenueCatInitialized)) {
-        // 移动端 RevenueCat 未就绪时回退到 Stripe Web 支付
+      if (paymentPlatform === 'stripe') {
         const origin = getOrigin();
         console.log('Calling stripeCheckout with:', { plan, billing });
         
