@@ -76,7 +76,7 @@ export default function ChatInput({ onSend, disabled, voiceEnabled = false }) {
           placeholder={t("typeMessage")}
           disabled={disabled}
           rows={1}
-          className="flex-1 resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none px-3 py-2 max-h-24 min-h-[40px]"
+          className="flex-1 resize-none bg-transparent text-base text-foreground placeholder:text-muted-foreground outline-none px-3 py-2 max-h-24 min-h-[40px]"
           style={{ overflow: "auto" }}
         />
         <div className="flex items-center gap-1">

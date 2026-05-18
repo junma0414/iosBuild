@@ -1,5 +1,4 @@
 // @ts-nocheck
-// src/pages/Login.jsx
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
@@ -30,7 +29,6 @@ const getApiUrl = () => {
   return import.meta.env?.VITE_API_URL || 'http://localhost:3000/api';
 };
 
-// 全局标志，防止 SDK 重复初始化
 let googleSDKLoaded = false;
 let googleSDKInitializing = false;
 
@@ -45,95 +43,99 @@ const Login = () => {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [showTermsError, setShowTermsError] = useState(false);
   const [serverError, setServerError] = useState('');
-  
-  // 忘记密码相关状态
+
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
   const [resetMessage, setResetMessage] = useState('');
   const [resetError, setResetError] = useState('');
   const [isSendingReset, setIsSendingReset] = useState(false);
-  
-  // 邮箱验证相关状态
+
   const [showVerificationMessage, setShowVerificationMessage] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState('');
-  
+
   const { login, register, isAuthenticated, authError: contextAuthError, checkAuth } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const googleInitializedRef = useRef(false);
 
-  // 监听 OAuth 回调（Custom Scheme 或 Universal Link）
   useEffect(() => {
-    if (!isNativeApp()) {
-      console.log('📲 [deepLink] not native app, skipping deep link listener');
-      return;
-    }
-    console.log('📲 [deepLink] setting up appUrlOpen listener');
-    console.log('📲 [deepLink] Capacitor.App available:', !!window.Capacitor?.Plugins?.App);
-
+    if (!isNativeApp()) return;
     const handleOpenUrl = async (event) => {
       const url = event?.url || '';
-      console.log('📲 [deepLink] App opened via URL:', url);
+
+      // Apple OAuth callback
+      if (url.startsWith('com.lingumate.omnifamily://auth/apple/callback')) {
+        const appleCode = url.match(/[?&]code=([^&]+)/);
+        const appleIdToken = url.match(/[?&]id_token=([^&]+)/);
+        if (appleCode || appleIdToken) {
+          try {
+            const apiUrl = getApiUrl();
+            let body, endpoint;
+            if (appleIdToken) {
+              endpoint = `${apiUrl}/auth/apple`;
+              body = JSON.stringify({ identityToken: decodeURIComponent(appleIdToken[1]) });
+            } else {
+              endpoint = `${apiUrl}/auth/apple/callback`;
+              body = JSON.stringify({ code: decodeURIComponent(appleCode[1]) });
+            }
+            const response = await fetch(endpoint, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' }, body,
+            });
+            const data = await response.json();
+            if (data.accessToken) {
+              localStorage.setItem('accessToken', data.accessToken);
+              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+              checkAuth();
+              navigate('/');
+            } else {
+              setError(data.error || 'Apple login failed');
+            }
+          } catch (err) {
+            setError(err.message || 'Apple login failed');
+          }
+        }
+        return;
+      }
 
       const accessTokenMatch = url.match(/[?&]accessToken=([^&]+)/);
       if (accessTokenMatch) {
         const accessToken = decodeURIComponent(accessTokenMatch[1]);
         const refreshTokenMatch = url.match(/[?&]refreshToken=([^&]+)/);
         const refreshToken = refreshTokenMatch ? decodeURIComponent(refreshTokenMatch[1]) : null;
-        console.log('📲 [deepLink] found accessToken, saving to localStorage');
         localStorage.setItem('accessToken', accessToken);
         if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
-        console.log('📲 [deepLink] navigating to /');
         navigate('/');
         return;
       }
 
       const codeMatch = url.match(/[?&]code=([^&]+)/);
-      if (!codeMatch) {
-        console.log('📲 [deepLink] no code found in URL, ignoring');
-        return;
-      }
+      if (!codeMatch) return;
 
       const code = decodeURIComponent(codeMatch[1]);
-      console.log('📲 [deepLink] Extracted authorization code from callback URL');
-
       try {
         const apiUrl = getApiUrl();
-        console.log('📲 [deepLink] exchanging code at:', `${apiUrl}/auth/google/callback`);
         const response = await fetch(`${apiUrl}/auth/google/callback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code }),
         });
-
         const data = await response.json();
-        console.log('📲 [deepLink] exchange response status:', response.status);
-        console.log('📲 [deepLink] exchange response has accessToken:', !!data.accessToken);
-
         if (data.accessToken) {
           localStorage.setItem('accessToken', data.accessToken);
           localStorage.setItem('refreshToken', data.refreshToken);
-          console.log('📲 [deepLink] navigating to /');
           checkAuth();
           navigate('/');
         } else {
-          console.error('📲 [deepLink] OAuth callback failed:', data.error);
           setError(data.error || 'Login failed');
         }
       } catch (err) {
-        console.error('📲 [deepLink] OAuth callback error:', err);
         setError(err.message || 'OAuth callback failed');
       }
     };
 
-    // Capacitor App plugin
     if (window.Capacitor?.Plugins?.App) {
-      console.log('📲 [deepLink] adding appUrlOpen listener');
       window.Capacitor.Plugins.App.addListener('appUrlOpen', handleOpenUrl);
-    } else {
-      console.warn('📲 [deepLink] Capacitor.App plugin not available');
     }
-
     return () => {
       if (window.Capacitor?.Plugins?.App) {
         window.Capacitor.Plugins.App.removeAllListeners('appUrlOpen');
@@ -141,18 +143,13 @@ const Login = () => {
     };
   }, []);
 
-  // 监听 Browser 关闭事件（如果用户关闭了 Custom Tab 但未登录）
   useEffect(() => {
     if (!isNativeApp()) return;
     const handleBrowserClosed = () => {
-      console.log('📱 [browserClose] Browser Custom Tab was closed');
       setLoading(false);
     };
     if (window.Capacitor?.Plugins?.Browser) {
       window.Capacitor.Plugins.Browser.addListener('browserFinished', handleBrowserClosed);
-      window.Capacitor.Plugins.Browser.addListener('browserPageLoaded', () => {
-        console.log('📱 [browserPageLoaded] Browser page loaded');
-      });
     }
     return () => {
       if (window.Capacitor?.Plugins?.Browser) {
@@ -161,88 +158,55 @@ const Login = () => {
     };
   }, []);
 
-  // 清理旧的认证数据（避免切换账户时出现灰幕）- 已移除，避免清除已保存的 token
-
-  // 监听来自 Context 的认证错误
   useEffect(() => {
     if (contextAuthError) {
       let errorMsg = contextAuthError.message || 'Authentication failed';
-      
-      // 如果是 JSON 格式，提取 error 字段
       if (typeof errorMsg === 'string' && errorMsg.includes('"error"')) {
         try {
           const parsed = JSON.parse(errorMsg);
           errorMsg = parsed.error || parsed.message || errorMsg;
-        } catch (e) {
-          // 解析失败，保持原样
-        }
+        } catch (e) {}
       }
-      
       setServerError(errorMsg);
       const timer = setTimeout(() => setServerError(''), 5000);
       return () => clearTimeout(timer);
     }
   }, [contextAuthError]);
 
-  // 如果已经认证，重定向到首页
   useEffect(() => {
     if (isAuthenticated) {
       navigate('/');
     }
   }, [isAuthenticated, navigate]);
 
-  // 加载 Google SDK（只加载一次）
   useEffect(() => {
-    // 移动端不需要加载 Web SDK
     if (isNativeApp()) return;
-    
-    // 如果已经加载过，直接返回
     if (googleSDKLoaded || googleSDKInitializing) return;
-    
     const loadGoogleSDK = () => {
       googleSDKInitializing = true;
-      
-      // 检查是否已经存在
       if (window.google?.accounts?.id) {
         googleSDKLoaded = true;
         googleSDKInitializing = false;
-        console.log('✅ Google SDK already present');
         return;
       }
-      
-      // 移除可能存在的旧脚本
       const oldScript = document.getElementById('google-oauth-script');
       if (oldScript) oldScript.remove();
-      
       const script = document.createElement('script');
       script.id = 'google-oauth-script';
       script.src = 'https://accounts.google.com/gsi/client';
       script.async = true;
       script.defer = true;
-      script.onload = () => {
-        googleSDKLoaded = true;
-        googleSDKInitializing = false;
-        console.log('✅ Google SDK loaded');
-      };
-      script.onerror = () => {
-        googleSDKInitializing = false;
-        console.error('❌ Google SDK load failed');
-      };
+      script.onload = () => { googleSDKLoaded = true; googleSDKInitializing = false; };
+      script.onerror = () => { googleSDKInitializing = false; };
       document.head.appendChild(script);
     };
-    
     loadGoogleSDK();
-    
-    return () => {
-      googleInitializedRef.current = false;
-    };
+    return () => { googleInitializedRef.current = false; };
   }, []);
 
-  // 处理 Google 凭证
   const handleGoogleCredential = async (credential) => {
     try {
       const result = await base44.functions.invoke('googleLogin', { idToken: credential });
-      
       if (result?.data?.accessToken) {
         localStorage.setItem('accessToken', result.data.accessToken);
         localStorage.setItem('refreshToken', result.data.refreshToken);
@@ -256,12 +220,10 @@ const Login = () => {
     }
   };
 
-  // 检查 URL 中的验证参数
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get('verify');
     const emailParam = params.get('email');
-    
     if (token && emailParam) {
       verifyEmail(token, emailParam);
     }
@@ -274,7 +236,6 @@ const Login = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token, email: emailParam }),
       });
-      
       const data = await response.json();
       if (response.ok) {
         setVerificationEmail(emailParam);
@@ -293,18 +254,17 @@ const Login = () => {
     setError('');
     setAuthError(null);
     setShowTermsError(false);
-    
+
     if (isRegister && !agreeToTerms) {
       setShowTermsError(true);
       return;
     }
-    
+
     setLoading(true);
 
     try {
       if (isRegister) {
         const result = await register(email, password, fullName);
-        
         if (result?.requiresVerification) {
           setVerificationEmail(email);
           setShowVerificationMessage(true);
@@ -329,182 +289,84 @@ const Login = () => {
     }
   };
 
-
-   
-  // Google 登录主函数
-  /*const handleGoogleLogin = async () => {
+  const handleGoogleLogin = async () => {
     if (loading) return;
-    
     setLoading(true);
     setError('');
-    
-    try {
-      const nativeApp = isNativeApp();
-      
-      if (nativeApp) {
-        // ========== 移动端 ==========
-        const platform = isIOS() ? 'ios' : 'android';
-        const apiUrl = getApiUrl();
 
-        const response = await fetch(`${apiUrl}/auth/google/mobile-init?platform=${platform}`);
-        const data = await response.json();
-        
-        if (!data.authUrl) {
-          throw new Error('Failed to get OAuth URL');
+    const isNative = isNativeApp();
+
+    // ========== Native (Android & iOS): use capacitor-google-sign-in plugin ==========
+    if (isNative) {
+      try {
+        const result = await GoogleSignIn.handleSignInButton();
+        const idToken = result.response.authorizationCode;
+
+        if (!idToken) {
+          throw new Error('No identity token received from Google');
         }
-        
-        if (window.Capacitor?.Plugins?.Browser) {
-          await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
-          setTimeout(() => {
-            setLoading(false);
-          }, 1000);
+
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/auth/google`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ idToken }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Google login failed');
+        }
+
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          checkAuth();
+          navigate('/');
         } else {
-          window.location.href = data.authUrl;
+          throw new Error('No access token received from server');
         }
-      } else {
-        // ========== Web 端 - 直接重定向 ==========
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        
-        if (!clientId) {
-          setError('Google Client ID not configured');
-          setLoading(false);
-          return;
+      } catch (err) {
+        if (err.message === 'USER_CANCELLED') {
+          console.log('Google Sign-In cancelled by user');
+        } else {
+          console.error('Google Sign-In error:', err);
+          setError(err.message || 'Google login failed');
         }
-        
-        const redirectUri = `${window.location.origin}/auth/google/callback`;
-        const scope = encodeURIComponent('email profile openid');
-        const state = encodeURIComponent(Date.now().toString());
-        
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&` +
-          `scope=${scope}&` +
-          `state=${state}&` +
-          `access_type=online&` +
-          `prompt=select_account`;
-        
-        console.log('Redirecting to Google OAuth:', authUrl);
-        window.location.href = authUrl;
+      } finally {
+        setLoading(false);
       }
+      return;
+    }
+
+    // ========== Web: OAuth redirect ==========
+    try {
+      const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+      if (!clientId) {
+        setError('Google Client ID not configured');
+        setLoading(false);
+        return;
+      }
+
+      const redirectUri = `${window.location.origin}/auth/google/callback`;
+      const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+        `client_id=${clientId}&` +
+        `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+        `response_type=code&` +
+        `scope=email profile openid&` +
+        `access_type=online&` +
+        `prompt=select_account&` +
+        `state=${Date.now()}`;
+
+      window.location.href = authUrl;
     } catch (err) {
       console.error('Google login error:', err);
       setError(err.message || 'Google login failed');
       setLoading(false);
     }
-  }; */
+  };
 
-  const handleGoogleLogin = async () => {
-  console.log('📱 [handleGoogleLogin] started, loading:', loading);
-  if (loading) return;
-
-  setLoading(true);
-  setError('');
-
-  const isNative = isNativeApp();
-  console.log('📱 [handleGoogleLogin] isNative:', isNative);
-
-  // ========== Android Native: use capacitor-google-sign-in plugin ==========
-  if (isNative && isAndroid()) {
-    try {
-      const result = await GoogleSignIn.handleSignInButton();
-      const idToken = result.response.authorizationCode;
-
-      if (!idToken) {
-        throw new Error('No identity token received from Google');
-      }
-
-      const apiUrl = getApiUrl();
-      const res = await fetch(`${apiUrl}/auth/google`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idToken }),
-      });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || 'Google login failed');
-      }
-
-      if (data.accessToken) {
-        localStorage.setItem('accessToken', data.accessToken);
-        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-        checkAuth();
-        navigate('/');
-      } else {
-        throw new Error('No access token received from server');
-      }
-    } catch (err) {
-      console.log('📱 [Android Google Sign-In] error details:', JSON.stringify(err), 'message:', err.message);
-      if (err.message === 'USER_CANCELLED') {
-        console.log('📱 [Android Google Sign-In] user cancelled');
-      } else {
-        console.error('📱 [Android Google Sign-In] error:', err);
-        setError(err.message || 'Google login failed');
-      }
-    } finally {
-      setLoading(false);
-    }
-    return;
-  }
-
-  // ========== iOS Native: use Browser Custom Tab ==========
-  if (isNative) {
-    try {
-      const platform = 'ios';
-      const apiUrl = getApiUrl();
-
-      const response = await fetch(`${apiUrl}/auth/google/mobile-init?platform=${platform}`);
-      const data = await response.json();
-
-      if (!data.authUrl) {
-        throw new Error('Failed to get OAuth URL');
-      }
-
-      if (window.Capacitor?.Plugins?.Browser) {
-        await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
-        setTimeout(() => { setLoading(false); }, 1000);
-      } else {
-        window.location.href = data.authUrl;
-      }
-    } catch (err) {
-      console.error('📱 [handleGoogleLogin] error:', err);
-      setError(err.message || 'Google login failed');
-      setLoading(false);
-    }
-    return;
-  }
-
-  // ========== Web: OAuth redirect ==========
-  try {
-    const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-    if (!clientId) {
-      setError('Google Client ID not configured');
-      setLoading(false);
-      return;
-    }
-
-    const redirectUri = `${window.location.origin}/auth/google/callback`;
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-      `client_id=${clientId}&` +
-      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-      `response_type=code&` +
-      `scope=email profile openid&` +
-      `access_type=online&` +
-      `prompt=select_account&` +
-      `state=${Date.now()}`;
-
-    window.location.href = authUrl;
-  } catch (err) {
-    console.error('Google login error:', err);
-    setError(err.message || 'Google login failed');
-    setLoading(false);
-  }
-};
-
-  // Apple 登录处理
   const handleAppleLogin = async () => {
-    console.log('🍎 [handleAppleLogin] started');
     if (loading) return;
     setLoading(true);
     setError('');
@@ -517,8 +379,6 @@ const Login = () => {
         return;
       }
 
-      // 让后端构造 Apple OAuth URL 并处理 callback
-      // 后端接收 Apple 的 form_post，再重定向回前端带上 token
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/auth/apple/init`, {
         method: 'GET',
@@ -538,7 +398,7 @@ const Login = () => {
         window.location.href = data.authUrl;
       }
     } catch (err) {
-      console.error('🍎 Apple login error:', err);
+      console.error('Apple login error:', err);
       setError(err.message || 'Apple login failed');
       setLoading(false);
     }
@@ -550,11 +410,9 @@ const Login = () => {
       setResetError('Please enter your email address');
       return;
     }
-    
     setIsSendingReset(true);
     setResetError('');
     setResetMessage('');
-    
     try {
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/auth/forgot-password`, {
@@ -562,9 +420,7 @@ const Login = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: resetEmail }),
       });
-      
       const data = await response.json();
-      
       if (response.ok) {
         setResetMessage('Password reset link has been sent to your email.');
         setResetEmail('');
@@ -584,7 +440,6 @@ const Login = () => {
 
   const handleResendVerification = async () => {
     if (!verificationEmail) return;
-    
     setLoading(true);
     try {
       const apiUrl = getApiUrl();
@@ -593,7 +448,6 @@ const Login = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: verificationEmail }),
       });
-      
       if (response.ok) {
         alert('Verification email sent! Please check your inbox.');
       } else {
@@ -610,7 +464,6 @@ const Login = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
-        {/* 邮箱验证提示 */}
         {showVerificationMessage && (
           <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-start gap-3">
@@ -640,7 +493,6 @@ const Login = () => {
           </div>
         )}
 
-        {/* 错误提示 - 只显示后端返回的错误信息 */}
         {serverError && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
             <div className="flex items-start gap-3">
@@ -659,7 +511,6 @@ const Login = () => {
           </div>
         )}
 
-        {/* 忘记密码弹窗 */}
         {showForgotPassword && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
@@ -677,12 +528,10 @@ const Login = () => {
                   ×
                 </button>
               </div>
-              
               <form onSubmit={handleForgotPassword}>
                 <p className="text-sm text-gray-600 mb-4">
                   Enter your email address and we'll send you a link to reset your password.
                 </p>
-                
                 <input
                   type="email"
                   value={resetEmail}
@@ -691,19 +540,16 @@ const Login = () => {
                   className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition mb-4"
                   required
                 />
-                
                 {resetError && (
                   <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
                     {resetError}
                   </div>
                 )}
-                
                 {resetMessage && (
                   <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
                     {resetMessage}
                   </div>
                 )}
-                
                 <button
                   type="submit"
                   disabled={isSendingReset}
@@ -822,7 +668,6 @@ const Login = () => {
             </div>
           )}
 
-          {/* 普通错误提示 */}
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
               {error}
@@ -844,7 +689,6 @@ const Login = () => {
             )}
           </button>
 
-          {/* Google 登录按钮 */}
           {!isRegister && (
             <button
               type="button"
@@ -857,7 +701,6 @@ const Login = () => {
             </button>
           )}
 
-          {/* Apple 登录按钮（仅 iOS 原生环境） */}
           {!isRegister && !isAndroid() && isNativeApp() && isIOS() && (
             <button
               type="button"

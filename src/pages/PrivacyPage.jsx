@@ -1,20 +1,15 @@
 // @ts-nocheck
-// src/pages/PrivacyPage.jsx
 import React from 'react';
 import { PrivacyPolicy } from '../components/TermsAndPrivacy';
-
-// 直接从 localStorage 或默认获取语言
-const getLanguage = () => {
-  return localStorage.getItem('ui_language') || 'en';
-};
+import { useLanguage } from '../lib/LanguageContext';
 
 export default function PrivacyPage() {
-  const language = getLanguage();
-  
+  const { uiLanguage } = useLanguage();
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-4xl mx-auto py-8 px-4">
-        <PrivacyPolicy language={language} />
+        <PrivacyPolicy language={uiLanguage} />
       </div>
     </div>
   );
