@@ -292,6 +292,21 @@ const Login = () => {
     }
   };
 
+  // 监听 Capacitor Browser 关闭后检查 token
+  const browserFinishedRef = useRef(null);
+  useEffect(() => {
+    if (!isNativeApp() || !window.Capacitor?.Plugins?.Browser) return;
+    const handler = () => {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        checkAuth();
+        navigate('/');
+      }
+    };
+    window.Capacitor.Plugins.Browser.addListener('browserFinished', handler);
+    return () => { window.Capacitor.Plugins.Browser.removeAllListeners(); };
+  }, []);
+
   const handleGoogleLogin = async () => {
     if (loading) return;
     setLoading(true);
@@ -299,13 +314,9 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (iOS): use web OAuth redirect via Capacitor Browser ==========
-    // ========== Native (Android): try native plugin, fallback to web OAuth ==========
-    if (isNative) {
+    if (isNative && !isIOS()) {
+      // ========== Native (Android): try native plugin ==========
       try {
-        if (isIOS()) {
-          throw new Error('USE_WEB_FLOW');
-        }
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
         const idToken = result.response.authorizationCode;
@@ -341,17 +352,14 @@ const Login = () => {
           setLoading(false);
           return;
         }
-        if (err.message !== 'USE_WEB_FLOW' && !err.message?.includes('not implemented')) {
-          console.error('Google Sign-In native error:', err);
-          setError(err.message || 'Google login failed');
-          setLoading(false);
-          return;
-        }
-        console.log('Native Google Sign-In not available, falling back to web OAuth flow');
+        console.error('Google Sign-In native error:', err);
+        setError(err.message || 'Google login failed');
+        setLoading(false);
+        return;
       }
     }
 
-    // ========== Web / OAuth redirect (used for web and as fallback for native) ==========
+    // ========== Web / OAuth redirect (iOS native + web) ==========
     try {
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
@@ -361,10 +369,8 @@ const Login = () => {
       }
 
       let redirectUri;
-      let state = Date.now().toString();
       if (isNative) {
         redirectUri = `${import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud'}/auth/google/callback`;
-        state = 'app_login';
       } else {
         redirectUri = `${window.location.origin}/auth/google/callback`;
       }
@@ -373,13 +379,12 @@ const Login = () => {
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
         `response_type=code&` +
         `scope=email profile openid&` +
-        `access_type=online&` +
-        `prompt=select_account&` +
-        `state=${state}`;
+        `access_type=offline&` +
+        `prompt=select_account`;
 
       if (isNative && window.Capacitor?.Plugins?.Browser) {
         await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-        setTimeout(() => setLoading(false), 1000);
+        setTimeout(() => setLoading(false), 15000);
       } else {
         window.location.href = authUrl;
       }

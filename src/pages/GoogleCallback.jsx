@@ -71,14 +71,10 @@ const GoogleCallback = () => {
         console.log('✅ [GoogleCallback] tokens saved to localStorage');
         
         if (isMounted) {
-          const fromApp = state === 'app_login';
-          console.log('🔵 [GoogleCallback] fromApp:', fromApp, '-> saving and redirecting...');
-          if (fromApp) {
-            const returnUrl = `com.lingumate.app://login?accessToken=${encodeURIComponent(data.accessToken)}${data.refreshToken ? '&refreshToken=' + encodeURIComponent(data.refreshToken) : ''}`;
-            console.log('🔵 [GoogleCallback] redirecting to custom scheme:', returnUrl.substring(0, 80) + '...');
-            window.location.href = returnUrl;
+          console.log('🔵 [GoogleCallback] saving tokens and redirecting...');
+          if (window.Capacitor?.Plugins?.Browser) {
+            window.close();
           } else {
-            // 先刷新认证状态，再导航
             checkAuth();
             console.log('🔵 [GoogleCallback] navigating to /');
             navigate('/');
