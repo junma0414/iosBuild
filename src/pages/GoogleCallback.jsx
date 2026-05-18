@@ -1,6 +1,6 @@
 // src/pages/GoogleCallback.jsx
 // @ts-nocheck
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/AuthContext';
 
@@ -12,26 +12,17 @@ const GoogleCallback = () => {
   const { checkAuth } = useAuth();
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+  const processedRef = useRef(false);
 
   useEffect(() => {
-    let isMounted = true;
-    let isProcessing = false;
+    if (processedRef.current) return;
+    processedRef.current = true;
     
     const handleCallback = async () => {
-
-      if (isProcessing) return;
-      isProcessing = true;
-
       try {
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
         const errorParam = params.get('error');
-        const state = params.get('state');
-        
-        console.log('🔵 [GoogleCallback] code:', code ? 'present' : 'missing');
-        console.log('🔵 [GoogleCallback] state:', state);
-        console.log('🔵 [GoogleCallback] full URL:', window.location.href);
-        console.log('🔵 [GoogleCallback] fromApp (state===app_login):', state === 'app_login');
         
         if (errorParam) {
           throw new Error(`Google authentication failed: ${errorParam}`);
@@ -41,8 +32,6 @@ const GoogleCallback = () => {
           throw new Error('No authorization code received');
         }
         
-        console.log('🔵 [GoogleCallback] calling API:', `${API_BASE_URL}/auth/google/callback`);
-        
         const response = await fetch(`${API_BASE_URL}/auth/google/callback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -50,10 +39,6 @@ const GoogleCallback = () => {
         });
         
         const data = await response.json();
-        
-        console.log('🔵 [GoogleCallback] response status:', response.status);
-        console.log('🔵 [GoogleCallback] response data keys:', Object.keys(data));
-        console.log('🔵 [GoogleCallback] has accessToken:', !!data.accessToken);
         
         if (!response.ok) {
           throw new Error(data.error || `HTTP ${response.status}: Authentication failed`);
@@ -68,32 +53,20 @@ const GoogleCallback = () => {
           localStorage.setItem('refreshToken', data.refreshToken);
         }
         
-        console.log('✅ [GoogleCallback] tokens saved to localStorage');
-        
-        if (isMounted) {
-          console.log('🔵 [GoogleCallback] saving tokens and redirecting...');
-          if (window.Capacitor?.Plugins?.Browser) {
-            window.close();
-          } else {
-            checkAuth();
-            console.log('🔵 [GoogleCallback] navigating to /');
-            navigate('/');
-          }
+        if (window.Capacitor?.Plugins?.Browser) {
+          window.close();
+        } else {
+          checkAuth();
+          navigate('/');
         }
       } catch (err) {
         console.error('🔴 [GoogleCallback] error:', err);
-        if (isMounted) {
-          setError(err.message);
-          setLoading(false);
-        }
+        setError(err.message);
+        setLoading(false);
       }
     };
     
     handleCallback();
-    
-    return () => {
-      isMounted = false;
-    };
   }, [location, navigate]);
 
   // 加载状态

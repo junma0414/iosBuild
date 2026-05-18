@@ -5,7 +5,7 @@ import { TermsOfService } from '../components/TermsAndPrivacy';
 
 export default function TermsPage() {
   const [params] = useSearchParams();
-  const lang = params.get('lang') || localStorage.getItem("ui_language") || 'en';
+  const lang = params.get('lang') || 'en';
 
   return (
     <div className="min-h-screen bg-background">

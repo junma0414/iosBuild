@@ -536,7 +536,7 @@ const fetchUserStats = async () => {
     const baseUrl = isNative
       ? (import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud')
       : window.location.origin;
-    const lang = localStorage.getItem("ui_language") || 'en';
+    const lang = uiLanguage || 'en';
     const url = `${baseUrl}${path}?lang=${lang}`;
     if (isNative && window.Capacitor?.Plugins?.Browser) {
       window.Capacitor.Plugins.Browser.open({ url });

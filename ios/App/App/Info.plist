@@ -64,6 +64,14 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
+				<string>com.lingumate.app</string>
+			</array>
+			<key>CFBundleURLName</key>
+			<string>com.lingumate.app</string>
+		</dict>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
 				<string>com.googleusercontent.apps.925702138089-qk3rm2dg8ig4ghase8ukiqv7avfto175</string>
 			</array>
 			<key>CFBundleURLName</key>
