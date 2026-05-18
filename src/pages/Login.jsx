@@ -313,10 +313,13 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    if (isNative && !isIOS()) {
-      // ========== Native (Android): try native plugin ==========
+    // ========== Native (Android & iOS): try native plugin ==========
+    if (isNative) {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
+        if (isIOS()) {
+          GoogleSignIn.initialize();
+        }
         const result = await GoogleSignIn.handleSignInButton();
         const idToken = result.response.authorizationCode;
 
@@ -351,14 +354,18 @@ const Login = () => {
           setLoading(false);
           return;
         }
-        console.error('Google Sign-In native error:', err);
-        setError(err.message || 'Google login failed');
-        setLoading(false);
-        return;
+        if (err.message?.includes('unimplemented') || err.message?.includes('not implemented')) {
+          console.log('Google Sign-In native plugin not available, using web OAuth flow');
+        } else {
+          console.error('Google Sign-In native error:', err);
+          setError(err.message || 'Google login failed');
+          setLoading(false);
+          return;
+        }
       }
     }
 
-    // ========== Web / OAuth redirect (iOS native + web) ==========
+    // ========== Web / OAuth redirect (fallback for all platforms) ==========
     try {
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
@@ -367,12 +374,10 @@ const Login = () => {
         return;
       }
 
-      let redirectUri;
-      if (isNative) {
-        redirectUri = `${import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud'}/auth/google/callback`;
-      } else {
-        redirectUri = `${window.location.origin}/auth/google/callback`;
-      }
+      const redirectUri = isNative
+        ? `${import.meta.env.VITE_API_URL || 'https://lang.omnifamily.cloud/api'}/auth/google/callback`
+        : `${window.location.origin}/auth/google/callback`;
+
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${clientId}&` +
         `redirect_uri=${encodeURIComponent(redirectUri)}&` +
@@ -491,7 +496,7 @@ const Login = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md">
+      <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-8 w-full max-w-md">
         {showVerificationMessage && (
           <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
             <div className="flex items-start gap-3">
@@ -541,9 +546,9 @@ const Login = () => {
 
         {showForgotPassword && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl p-6 w-full max-w-md">
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-900">Reset Password</h2>
+                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Reset Password</h2>
                 <button
                   onClick={() => {
                     setShowForgotPassword(false);
@@ -551,13 +556,13 @@ const Login = () => {
                     setResetError('');
                     setResetEmail('');
                   }}
-                  className="text-gray-400 hover:text-gray-600"
+                  className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
                 >
                   ×
                 </button>
               </div>
               <form onSubmit={handleForgotPassword}>
-                <p className="text-sm text-gray-600 mb-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   Enter your email address and we'll send you a link to reset your password.
                 </p>
                 <input
@@ -565,16 +570,15 @@ const Login = () => {
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
                   placeholder="Enter your email"
-                  className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition mb-4 text-base"
+                  className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/20 transition mb-4 text-base"
                   required
                 />
                 {resetError && (
-                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                  <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg text-red-700 dark:text-red-300 text-sm">
                     {resetError}
                   </div>
-                )}
-                {resetMessage && (
-                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
+                  {resetMessage && (
+                    <div className="mb-4 p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg text-green-700 dark:text-green-300 text-sm">
                     {resetMessage}
                   </div>
                 )}
@@ -594,21 +598,21 @@ const Login = () => {
           <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center mx-auto mb-4">
             <span className="text-white font-bold text-2xl">L</span>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">LinguMate</h1>
-          <p className="text-gray-600 mt-2">Language Learning Platform</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">LinguMate</h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">Language Learning Platform</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {isRegister && (
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 Full Name
               </label>
               <input
                 type="text"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
                 placeholder="Enter your full name"
                 required
               />
@@ -616,28 +620,28 @@ const Login = () => {
           )}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
               placeholder="Enter your email"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Password
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
+              className="w-full px-4 py-3 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-primary focus:ring-2 focus:ring-primary/20 transition text-base"
               placeholder="Enter your password"
               required
               minLength={6}
@@ -669,7 +673,7 @@ const Login = () => {
                   }}
                   className="mt-1 w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
                 />
-                <label htmlFor="agreeTerms" className="text-sm text-gray-600">
+                <label htmlFor="agreeTerms" className="text-sm text-gray-600 dark:text-gray-400">
                   I agree to the{' '}
                   <button 
                     type="button"
@@ -697,7 +701,7 @@ const Login = () => {
           )}
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg">
               {error}
             </div>
           )}
@@ -722,7 +726,7 @@ const Login = () => {
               type="button"
               onClick={handleGoogleLogin}
               disabled={loading}
-              className="w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 font-semibold py-3 rounded-lg hover:bg-gray-50 transition disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-3 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 font-semibold py-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition disabled:opacity-50"
             >
               <Chrome className="w-5 h-5" />
               {t('signInWithGoogle')}
@@ -762,7 +766,7 @@ const Login = () => {
 
         {!isRegister && (
           <div className="mt-8 pt-6 border-t border-gray-200">
-            <p className="text-center text-gray-600 text-sm">
+            <p className="text-center text-gray-600 dark:text-gray-400 text-sm">
               By continuing, you agree to our{' '}
               <button 
                 type="button"
