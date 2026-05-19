@@ -299,12 +299,12 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (Android & iOS): try native Capacitor plugin ==========
+    // ========== Native (iOS & Android): use @codetrix-studio/capacitor-google-auth ==========
     if (isNative) {
       try {
-        const { GoogleSignIn } = await import('capacitor-google-sign-in');
-        const result = await GoogleSignIn.handleSignInButton();
-        const idToken = result.response.authorizationCode;
+        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
+        const googleUser = await GoogleAuth.signIn();
+        const idToken = googleUser.authentication?.idToken;
 
         if (!idToken) {
           throw new Error('No identity token received from Google');
@@ -332,22 +332,19 @@ const Login = () => {
         }
         return;
       } catch (err) {
-        if (err.message === 'USER_CANCELLED') {
+        if (err.message?.includes('CANCELLED') || err.message?.includes('cancelled')) {
           console.log('Google Sign-In cancelled by user');
           setLoading(false);
           return;
         }
-        if (!err.message?.includes('unimplemented') && !err.message?.includes('not implemented')) {
-          console.error('Google Sign-In native error:', err);
-          setError(err.message || 'Google login failed');
-          setLoading(false);
-          return;
-        }
-        console.log('Google Sign-In native plugin not available, falling back to GIS popup');
+        console.error('Google Auth native error:', err);
+        setError(err.message || 'Google login failed');
+        setLoading(false);
+        return;
       }
     }
 
-    // ========== Google Identity Services (GIS) popup (works in-app WebView, no browser switch) ==========
+    // ========== Web: Google Identity Services (GIS) popup ==========
     try {
       const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
       if (!clientId) {
@@ -419,28 +416,8 @@ const Login = () => {
       setTimeout(() => setLoading(false), 15000);
     } catch (err) {
       console.error('Google login error:', err);
-      // GIS failed, fall back to Capacitor Browser auth
-      try {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId) throw new Error('Google Client ID not configured');
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(`${import.meta.env.VITE_API_URL || 'https://lang.omnifamily.cloud/api'}/auth/google/callback`)}&` +
-          `response_type=code&` +
-          `scope=email profile openid&` +
-          `access_type=offline&` +
-          `prompt=select_account`;
-        if (window.Capacitor?.Plugins?.Browser) {
-          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-          setTimeout(() => setLoading(false), 15000);
-        } else {
-          window.location.href = authUrl;
-        }
-      } catch (fallbackErr) {
-        console.error('Google login fallback error:', fallbackErr);
-        setError(err.message || 'Google login failed');
-        setLoading(false);
-      }
+      setError(err.message || 'Google login failed');
+      setLoading(false);
     }
   };
 

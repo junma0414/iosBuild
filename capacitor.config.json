@@ -17,8 +17,10 @@
     "App": {
       "launchUrl": "index.html"
     },
-    "GoogleSignIn": {
-      "AndroidServerClientId": "925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com"
+    "GoogleAuth": {
+      "scopes": ["profile", "email"],
+      "serverClientId": "925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com",
+      "forceCodeForRefreshToken": true
     },
     "SignInWithApple": {}
   },
