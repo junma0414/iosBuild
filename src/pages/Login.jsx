@@ -150,6 +150,11 @@ const Login = () => {
     if (!isNativeApp()) return;
     const handleBrowserClosed = () => {
       setLoading(false);
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        checkAuth();
+        navigate('/');
+      }
     };
     if (window.Capacitor?.Plugins?.Browser) {
       window.Capacitor.Plugins.Browser.addListener('browserFinished', handleBrowserClosed);
@@ -159,7 +164,7 @@ const Login = () => {
         window.Capacitor.Plugins.Browser.removeAllListeners();
       }
     };
-  }, []);
+  }, [checkAuth, navigate]);
 
   useEffect(() => {
     if (contextAuthError) {
@@ -357,7 +362,7 @@ const Login = () => {
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${clientId}&` +
           `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account`;
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
 
         if (window.Capacitor?.Plugins?.Browser) {
           await window.Capacitor.Plugins.Browser.open({ url: authUrl });
@@ -465,8 +470,9 @@ const Login = () => {
       }
 
       const isNative = isNativeApp();
+      const platform = isNative ? (isIOS() ? 'ios' : 'android') : 'web';
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/auth/apple/init`, {
+      const response = await fetch(`${apiUrl}/auth/apple/init?platform=${platform}`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
@@ -786,7 +792,7 @@ const Login = () => {
             </button>
           )}
 
-          {!isRegister && !isAndroid() && isNativeApp() && isIOS() && (
+          {!isRegister && (
             <button
               type="button"
               onClick={handleAppleLogin}

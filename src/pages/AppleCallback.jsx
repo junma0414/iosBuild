@@ -1,6 +1,6 @@
 // @ts-nocheck
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const getApiUrl = () => {
   if (window.Capacitor?.isNativePlatform?.()) {
@@ -14,16 +14,28 @@ const AppleCallback = () => {
   const location = useLocation();
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(true);
+  const processedRef = useRef(false);
 
   useEffect(() => {
+    if (processedRef.current) return;
+    processedRef.current = true;
+
     const processAppleCallback = async () => {
       try {
-        // Apple sends form POST data — check URL params first
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
         const idToken = params.get('id_token');
+        const accessToken = params.get('accessToken');
         const userJson = params.get('user');
         let fullName = null;
+
+        if (accessToken) {
+          const refreshToken = params.get('refreshToken');
+          localStorage.setItem('accessToken', accessToken);
+          if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+          navigate('/');
+          return;
+        }
 
         if (userJson) {
           try {

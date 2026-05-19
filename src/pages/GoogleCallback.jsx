@@ -1,4 +1,3 @@
-// src/pages/GoogleCallback.jsx
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -17,59 +16,64 @@ const GoogleCallback = () => {
   useEffect(() => {
     if (processedRef.current) return;
     processedRef.current = true;
-    
+
     const handleCallback = async () => {
       try {
         const params = new URLSearchParams(location.search);
+        const accessToken = params.get('accessToken');
+        const refreshToken = params.get('refreshToken');
         const code = params.get('code');
         const errorParam = params.get('error');
-        
+
         if (errorParam) {
           throw new Error(`Google authentication failed: ${errorParam}`);
         }
-        
+
+        if (accessToken) {
+          localStorage.setItem('accessToken', accessToken);
+          if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+          checkAuth();
+          navigate('/');
+          return;
+        }
+
         if (!code) {
           throw new Error('No authorization code received');
         }
-        
+
         const response = await fetch(`${API_BASE_URL}/auth/google/callback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ code }),
         });
-        
+
         const data = await response.json();
-        
+
         if (!response.ok) {
           throw new Error(data.error || `HTTP ${response.status}: Authentication failed`);
         }
-        
+
         if (!data.accessToken) {
           throw new Error('No access token received from server');
         }
-        
+
         localStorage.setItem('accessToken', data.accessToken);
         if (data.refreshToken) {
           localStorage.setItem('refreshToken', data.refreshToken);
         }
-        
-        if (window.Capacitor?.Plugins?.Browser) {
-          window.close();
-        } else {
-          checkAuth();
-          navigate('/');
-        }
+
+        checkAuth();
+        navigate('/');
       } catch (err) {
-        console.error('🔴 [GoogleCallback] error:', err);
+        console.error('[GoogleCallback] error:', err);
         setError(err.message);
         setLoading(false);
       }
     };
-    
-    handleCallback();
-  }, [location, navigate]);
 
-  // 加载状态
+    handleCallback();
+  }, [location, navigate, checkAuth]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100">
@@ -81,7 +85,6 @@ const GoogleCallback = () => {
     );
   }
 
-  // 错误状态
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
