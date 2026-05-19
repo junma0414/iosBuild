@@ -299,12 +299,12 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (iOS & Android): use @codetrix-studio/capacitor-google-auth ==========
+    // ========== Native: try Capacitor Google sign in plugin ==========
     if (isNative) {
       try {
-        const { GoogleAuth } = await import('@codetrix-studio/capacitor-google-auth');
-        const googleUser = await GoogleAuth.signIn();
-        const idToken = googleUser.authentication?.idToken;
+        const { GoogleSignIn } = await import('capacitor-google-sign-in');
+        const result = await GoogleSignIn.handleSignInButton();
+        const idToken = result.response?.authorizationCode || result.response?.idToken;
 
         if (!idToken) {
           throw new Error('No identity token received from Google');
@@ -332,15 +332,18 @@ const Login = () => {
         }
         return;
       } catch (err) {
-        if (err.message?.includes('CANCELLED') || err.message?.includes('cancelled')) {
+        if (err.message === 'USER_CANCELLED') {
           console.log('Google Sign-In cancelled by user');
           setLoading(false);
           return;
         }
-        console.error('Google Auth native error:', err);
-        setError(err.message || 'Google login failed');
-        setLoading(false);
-        return;
+        if (!err.message?.includes('unimplemented') && !err.message?.includes('not implemented')) {
+          console.error('Google Sign-In native error:', err);
+          setError(err.message || 'Google login failed');
+          setLoading(false);
+          return;
+        }
+        console.log('Google Sign-In native plugin not available, falling back to web flow');
       }
     }
 
