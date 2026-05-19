@@ -299,8 +299,10 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native: try Capacitor Google sign in plugin ==========
-    if (isNative) {
+    // ========== Native (Android only): try Capacitor Google sign in plugin ==========
+    // iOS: capacitor-google-sign-in plugin has no native iOS implementation in Capacitor 8,
+    // so skip directly to GIS popup flow
+    if (isNative && !isIOS()) {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
@@ -337,13 +339,38 @@ const Login = () => {
           setLoading(false);
           return;
         }
-        if (!err.message?.includes('unimplemented') && !err.message?.includes('not implemented')) {
-          console.error('Google Sign-In native error:', err);
-          setError(err.message || 'Google login failed');
-          setLoading(false);
-          return;
+        console.error('Google Sign-In native error:', err);
+        setError(err.message || 'Google login failed');
+        setLoading(false);
+        return;
+      }
+    }
+
+    // ========== iOS: Capacitor Browser OAuth ==========
+    // iOS WKWebView has limitations with GIS popup, so use Capacitor Browser
+    if (isNative && isIOS()) {
+      try {
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId) throw new Error('Google Client ID not configured');
+
+        const redirectUri = `${import.meta.env.VITE_API_URL || 'https://lang.omnifamily.cloud/api'}/auth/google/callback`;
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account`;
+
+        if (window.Capacitor?.Plugins?.Browser) {
+          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
+          setTimeout(() => setLoading(false), 15000);
+        } else {
+          window.location.href = authUrl;
         }
-        console.log('Google Sign-In native plugin not available, falling back to web flow');
+        return;
+      } catch (err) {
+        console.error('Google login error:', err);
+        setError(err.message || 'Google login failed');
+        setLoading(false);
+        return;
       }
     }
 
