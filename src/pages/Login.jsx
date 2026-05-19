@@ -459,7 +459,7 @@ const Login = () => {
 
       const isNative = isNativeApp();
       const apiUrl = getApiUrl();
-      const response = await fetch(`${apiUrl}/auth/apple/init?platform=${isNative ? (isIOS() ? 'ios' : 'android') : 'web'}`, {
+      const response = await fetch(`${apiUrl}/auth/apple/init`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' },
       });
