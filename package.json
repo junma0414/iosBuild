@@ -27,7 +27,6 @@
     "@capacitor/ios": "^8.3.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/share": "^8.0.1",
-    "@codetrix-studio/capacitor-google-auth": "^3.4.0-rc.4",
     "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^4.1.2",
     "@radix-ui/react-accordion": "^1.2.3",
@@ -95,6 +94,12 @@
     "three": "^0.171.0",
     "vaul": "^1.1.2",
     "zod": "^3.24.2"
+  },
+  "overrides": {
+    "@capacitor/core": "$@capacitor/core",
+    "@capacitor/cli": "$@capacitor/core",
+    "@capacitor/ios": "$@capacitor/core",
+    "@capacitor/android": "$@capacitor/core"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
