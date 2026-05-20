@@ -44,7 +44,7 @@ const GoogleCallback = () => {
         const response = await fetch(`${API_BASE_URL}/auth/google/callback`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
+          body: JSON.stringify({ code, redirect_uri: window.location.origin + '/auth/google/callback' }),
         });
 
         const data = await response.json();

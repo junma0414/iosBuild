@@ -63,6 +63,22 @@ const Login = () => {
     const handleOpenUrl = async (event) => {
       const url = event?.url || '';
 
+      // Handle com.lingumate.app://login redirect (from backend OAuth callbacks)
+      const urlObj = (() => {
+        try { return new URL(url); } catch (_) { return null; }
+      })();
+      const params = urlObj ? urlObj.searchParams : new URLSearchParams(url.split('?')[1] || '');
+
+      const accessToken = params.get('accessToken');
+      if (accessToken) {
+        const refreshToken = params.get('refreshToken');
+        localStorage.setItem('accessToken', accessToken);
+        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+        checkAuth();
+        navigate('/');
+        return;
+      }
+
       // Apple OAuth callback (native: custom scheme with query params)
       if (url.startsWith('com.lingumate.omnifamily://auth/apple/callback')) {
         const appleCode = url.match(/[?&]code=([^&]+)/);
@@ -97,17 +113,6 @@ const Login = () => {
             setError(err.message || 'Apple login failed');
           }
         }
-        return;
-      }
-
-      const accessTokenMatch = url.match(/[?&]accessToken=([^&]+)/);
-      if (accessTokenMatch) {
-        const accessToken = decodeURIComponent(accessTokenMatch[1]);
-        const refreshTokenMatch = url.match(/[?&]refreshToken=([^&]+)/);
-        const refreshToken = refreshTokenMatch ? decodeURIComponent(refreshTokenMatch[1]) : null;
-        localStorage.setItem('accessToken', accessToken);
-        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
-        navigate('/');
         return;
       }
 
@@ -148,16 +153,13 @@ const Login = () => {
 
   useEffect(() => {
     if (!isNativeApp()) return;
-    const handleBrowserClosed = () => {
-      setLoading(false);
-      const token = localStorage.getItem('accessToken');
-      if (token) {
-        checkAuth();
-        navigate('/');
-      }
-    };
     if (window.Capacitor?.Plugins?.Browser) {
-      window.Capacitor.Plugins.Browser.addListener('browserFinished', handleBrowserClosed);
+      window.Capacitor.Plugins.Browser.addListener('browserFinished', () => {
+        setLoading(false);
+      });
+      window.Capacitor.Plugins.Browser.addListener('browserPageLoaded', () => {
+        // no-op
+      });
     }
     return () => {
       if (window.Capacitor?.Plugins?.Browser) {
@@ -304,9 +306,7 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (Android only): try Capacitor Google sign in plugin ==========
-    // iOS: capacitor-google-sign-in plugin has no native iOS implementation in Capacitor 8,
-    // so skip directly to GIS popup flow
+    // ========== Native (Android): Capacitor Google Sign-In plugin ==========
     if (isNative && !isIOS()) {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
@@ -351,8 +351,7 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: Capacitor Browser OAuth ==========
-    // iOS WKWebView has limitations with GIS popup, so use Capacitor Browser
+    // ========== iOS: use Capacitor Browser OAuth (fallback to Web GIS popup) ==========
     if (isNative && isIOS()) {
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
@@ -417,7 +416,7 @@ const Login = () => {
               const res = await fetch(`${apiUrl}/auth/google/callback`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: response.code }),
+                body: JSON.stringify({ code: response.code, redirect_uri: 'postmessage' }),
               });
               const data = await res.json();
 
@@ -461,6 +460,63 @@ const Login = () => {
     setLoading(true);
     setError('');
 
+    const isNative = isNativeApp();
+
+    // ========== Native (iOS): use SignInWithApple plugin ==========
+    if (isNative && isIOS()) {
+      try {
+        const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
+        if (!SignInWithApple) {
+          throw new Error('SignInWithApple plugin not available');
+        }
+        const result = await SignInWithApple.authorize({
+          clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
+          redirectUri: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
+          scopes: 'email name',
+        });
+
+        const identityToken = result.response?.identityToken;
+        const fullName = result.response?.fullName
+          ? `${result.response.fullName.givenName || ''} ${result.response.fullName.familyName || ''}`.trim()
+          : null;
+
+        if (!identityToken) {
+          throw new Error('No identity token received from Apple');
+        }
+
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/auth/apple`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identityToken, fullName }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || 'Apple login failed');
+        }
+
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          checkAuth();
+          navigate('/');
+        } else {
+          throw new Error('No access token received from server');
+        }
+        return;
+      } catch (err) {
+        if (err.message?.includes('cancel') || err.code === 'userCancelled') {
+          console.log('Apple Sign-In cancelled by user');
+          setLoading(false);
+          return;
+        }
+        console.error('Apple Sign-In native error:', err);
+        // Fall through to Browser-based OAuth
+      }
+    }
+
+    // ========== Web / Fallback: Browser OAuth ==========
     try {
       const clientId = import.meta.env.VITE_APPLE_CLIENT_ID;
       if (!clientId) {
@@ -469,7 +525,6 @@ const Login = () => {
         return;
       }
 
-      const isNative = isNativeApp();
       const platform = isNative ? (isIOS() ? 'ios' : 'android') : 'web';
       const apiUrl = getApiUrl();
       const response = await fetch(`${apiUrl}/auth/apple/init?platform=${platform}`, {

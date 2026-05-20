@@ -134,8 +134,24 @@ const useDarkMode = () => {
   }, []);
 };
 
+// Android 键盘遮挡输入框处理
+const useKeyboardHandler = () => {
+  useEffect(() => {
+    if (window.Capacitor?.isNativePlatform?.() !== true) return;
+    const onFocusIn = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        setTimeout(() => e.target.scrollIntoView?.({ behavior: 'smooth', block: 'center' }), 300);
+      }
+    };
+    document.addEventListener('focusin', onFocusIn);
+    return () => document.removeEventListener('focusin', onFocusIn);
+  }, []);
+};
+
 function App() {
   useDarkMode();
+  useKeyboardHandler();
 
   return (
     <QueryClientProvider client={queryClientInstance}>

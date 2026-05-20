@@ -1,6 +1,7 @@
 // @ts-nocheck
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../lib/AuthContext';
 
 const getApiUrl = () => {
   if (window.Capacitor?.isNativePlatform?.()) {
@@ -12,6 +13,7 @@ const getApiUrl = () => {
 const AppleCallback = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { checkAuth } = useAuth();
   const [error, setError] = useState('');
   const [processing, setProcessing] = useState(true);
   const processedRef = useRef(false);
@@ -33,6 +35,7 @@ const AppleCallback = () => {
           const refreshToken = params.get('refreshToken');
           localStorage.setItem('accessToken', accessToken);
           if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+          await checkAuth();
           navigate('/');
           return;
         }
@@ -66,7 +69,8 @@ const AppleCallback = () => {
           if (data.accessToken) {
             localStorage.setItem('accessToken', data.accessToken);
             if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-            navigate('/');
+            await checkAuth();
+            navigate('/login');
             return;
           } else {
             throw new Error(data.error || 'Apple login failed');
@@ -84,7 +88,8 @@ const AppleCallback = () => {
           if (data.accessToken) {
             localStorage.setItem('accessToken', data.accessToken);
             if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-            navigate('/');
+            await checkAuth();
+            navigate('/login');
             return;
           } else {
             throw new Error(data.error || 'Apple login failed');
