@@ -237,6 +237,7 @@ export default function Checkout() {
         }
       } else if (paymentPlatform === 'appstore' || paymentPlatform === 'googleplay') {
         if (!revenueCatAvailable || !revenueCatInitialized) {
+          console.error('RevenueCat not ready:', { available: revenueCatAvailable, initialized: revenueCatInitialized });
           throw new Error('payment on mobile APP is not ready, please try later');
         }
         
@@ -247,21 +248,27 @@ export default function Checkout() {
         
         console.log(`使用RevenueCat支付:`, { plan, billing, packageId, platform: paymentPlatform });
         
-        const result = await purchaseProduct(packageId);
-        
-        if (result.success) {
-  console.log('RevenueCat purchase successful:', result);
-  setPlan(plan, billing);
-  await handlePaymentSuccess();
-} else if (result.cancelled) {
-  // User cancelled the purchase - just close the dialog, no error
-  console.log('User cancelled the purchase');
-  setError(null);
-  // Optionally show a temporary message or just do nothing
-  // You can add a toast notification here if you want
-} else {
-  throw new Error(result.error || 'Purchase incomplete');
-}
+        try {
+          const result = await purchaseProduct(packageId);
+          
+          if (result.success) {
+            console.log('RevenueCat purchase successful:', result);
+            setPlan(plan, billing);
+            await handlePaymentSuccess();
+          } else if (result.cancelled) {
+            console.log('User cancelled the purchase');
+            setError(null);
+          } else {
+            throw new Error(result.error || 'Purchase incomplete');
+          }
+        } catch (purchaseErr) {
+          console.error('RevenueCat purchaseProduct threw:', purchaseErr);
+          // Re-throw with better message
+          if (purchaseErr.message?.includes('Package') && purchaseErr.message?.includes('not found')) {
+            throw new Error(`Product "${packageId}" not configured in RevenueCat Dashboard. Check RevenueCat → Offerings`);
+          }
+          throw purchaseErr;
+        }
       }
     } catch (err) {
       console.error('支付错误:', err);
