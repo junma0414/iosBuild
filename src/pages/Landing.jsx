@@ -214,7 +214,7 @@ export default function Landing() {
             {/* Free */}
             <Card className="p-6 text-center border-0 shadow-sm">
               <h3 className="text-xl font-bold mb-2">Free</h3>
-              <div className="text-3xl font-bold mb-4">$0</div>
+              <div className="text-3xl font-bold mb-4">S$0</div>
               <p className="text-sm text-muted-foreground mb-6">Basic features to get started</p>
               <Link to="/login">
                 <Button variant="outline" className="w-full rounded-full">Get Started</Button>
@@ -227,8 +227,8 @@ export default function Landing() {
                 Popular
               </div>
               <h3 className="text-xl font-bold mb-2">Pro</h3>
-              <div className="text-3xl font-bold mb-2">$9.9</div>
-              <p className="text-sm text-muted-foreground mb-6">per month</p>
+              <div className="text-3xl font-bold mb-2">S$9.9</div>
+              <p className="text-sm text-muted-foreground mb-6">SGD / month</p>
               <Link to="/login">
                 <Button className="w-full rounded-full">Start Pro Trial</Button>
               </Link>
@@ -237,8 +237,8 @@ export default function Landing() {
             {/* Premium */}
             <Card className="p-6 text-center border-0 shadow-sm">
               <h3 className="text-xl font-bold mb-2">Premium</h3>
-              <div className="text-3xl font-bold mb-2">$19.9</div>
-              <p className="text-sm text-muted-foreground mb-6">per month</p>
+              <div className="text-3xl font-bold mb-2">S$19.9</div>
+              <p className="text-sm text-muted-foreground mb-6">SGD / month</p>
               <Link to="/login">
                 <Button variant="outline" className="w-full rounded-full">Go Premium</Button>
               </Link>
