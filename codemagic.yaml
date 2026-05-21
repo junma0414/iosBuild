@@ -40,6 +40,9 @@ workflows:
           rm -f ios/App/Podfile.lock
           rm -rf ios/App/Pods
           ls -la ios/App/
+          # 调试：检查 xcodeproj 是否存在
+          ls -la ios/App/*.xcodeproj 2>/dev/null || echo "NO XCODEPROJ FOUND"
+          ls -la ios/App/*.xcworkspace 2>/dev/null || echo "NO XCWORKSPACE FOUND"
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
