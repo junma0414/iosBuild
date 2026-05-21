@@ -28,11 +28,18 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
           npx cap sync ios
-
-          # 手动写入 packageClassList
+          # 追加 packageClassList 到 iOS 项目的 capacitor.config.json
+          sed -i '' '/"packageClassList"/d' ios/App/App/capacitor.config.json 2>/dev/null || true
           sed -i '' 's/}$/, "packageClassList": ["AppPlugin","CAPBrowserPlugin","DevicePlugin","PreferencesPlugin","SharePlugin","TextToSpeechPlugin","RevenuecatPurchasesCapacitorPlugin"]}/' ios/App/App/capacitor.config.json 2>/dev/null || true
-          grep packageClassList ios/App/App/capacitor.config.json
+          python3 -c "import json; d=json.load(open('ios/App/App/capacitor.config.json')); print('packageClassList:', d.get('packageClassList'))" 2>/dev/null || echo "json parse failed"
+          ls -la ios/App/
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
@@ -103,6 +110,10 @@ workflows:
               var window: UIWindow?
 
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  window = UIWindow(frame: UIScreen.main.bounds)
+                  let bridgeViewController = CAPBridgeViewController()
+                  window?.rootViewController = bridgeViewController
+                  window?.makeKeyAndVisible()
                   return true
               }
 
