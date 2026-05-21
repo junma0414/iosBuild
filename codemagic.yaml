@@ -28,23 +28,16 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
           npx cap sync ios
-          cd ios/App && pod install && ls -la
-          # 找 capacitor.config.json 的实际位置
-          find ios -name "capacitor.config.json" -maxdepth 5 2>/dev/null
-          CAP_CONFIG=$(find ios -name "capacitor.config.json" -maxdepth 5 2>/dev/null | head -1)
-          echo "Found cap config at: $CAP_CONFIG"
-          if [ -n "$CAP_CONFIG" ]; then
-            /usr/libexec/PlistBuddy -c "Add :packageClassList array" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:0 string 'AppPlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:1 string 'CAPBrowserPlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:2 string 'DevicePlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:3 string 'PreferencesPlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:4 string 'SharePlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:5 string 'TextToSpeechPlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            /usr/libexec/PlistBuddy -c "Add :packageClassList:6 string 'RevenuecatPurchasesCapacitorPlugin'" "$CAP_CONFIG" 2>/dev/null || true
-            python3 -c "import sys,json; d=json.load(open('$CAP_CONFIG')); print('packageClassList:', d.get('packageClassList', 'NOT FOUND'))"
-          fi
+          # 复制根目录 capacitor.config.json（包含 packageClassList）覆盖 iOS 项目
+          cp capacitor.config.json ios/App/App/capacitor.config.json
+          ls -la ios/App/
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
@@ -149,8 +142,6 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
-          echo "=== Build directory ==="
-          ls -la *.xcodeproj *.xcworkspace 2>&1
           xcode-project build-ipa \
             --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
