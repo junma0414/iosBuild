@@ -35,10 +35,9 @@ workflows:
           end
           EOF
           npx cap sync ios
-          # 追加 packageClassList 到 iOS 项目的 capacitor.config.json
-          sed -i '' '/"packageClassList"/d' ios/App/App/capacitor.config.json 2>/dev/null || true
-          sed -i '' 's/}$/, "packageClassList": ["AppPlugin","CAPBrowserPlugin","DevicePlugin","PreferencesPlugin","SharePlugin","TextToSpeechPlugin","RevenuecatPurchasesCapacitorPlugin"]}/' ios/App/App/capacitor.config.json 2>/dev/null || true
-          python3 -c "import json; d=json.load(open('ios/App/App/capacitor.config.json')); print('packageClassList:', d.get('packageClassList'))" 2>/dev/null || echo "json parse failed"
+          # 复制根目录的 capacitor.config.json（含 packageClassList）到 iOS 项目
+          cp capacitor.config.json ios/App/App/capacitor.config.json
+          python3 -c "import json; d=json.load(open('ios/App/App/capacitor.config.json')); print('packageClassList:', d.get('packageClassList'))"
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
