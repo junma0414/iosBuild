@@ -24,6 +24,7 @@ const AppleCallback = () => {
 
     const processAppleCallback = async () => {
       try {
+        console.log('AppleCallback processing, search:', location.search);
         const params = new URLSearchParams(location.search);
         const code = params.get('code');
         const idToken = params.get('id_token');
@@ -107,20 +108,18 @@ const AppleCallback = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-        <div className="bg-white rounded-2xl shadow-xl p-8 w-full max-w-md text-center">
-          <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-4">
-            <span className="text-red-600 text-2xl">✕</span>
-          </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Login Failed</h2>
-          <p className="text-gray-600 mb-6">{error}</p>
-          <button
-            onClick={() => navigate('/login')}
-            className="w-full bg-primary text-white font-semibold py-3 rounded-lg hover:bg-primary/90 transition"
-          >
-            Back to Login
-          </button>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', padding: '20px' }}>
+        <p style={{ color: 'red', marginBottom: '10px' }}>{error}</p>
+        <p style={{ fontSize: '14px', color: '#666' }}>Search params: {location.search}</p>
+      </div>
+    );
+  }
+  
+  if (processing) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
+        <p style={{ fontSize: '18px', color: '#666' }}>Signing in with Apple...</p>
+        <p style={{ fontSize: '14px', color: '#999', marginTop: '10px' }}>Please wait</p>
       </div>
     );
   }
