@@ -31,22 +31,8 @@ workflows:
           npx cap sync ios
 
           # 手动写入 packageClassList
-          cat > /tmp/fix_package_classlist.py <<'EOF'
-import json, os
-path = 'ios/App/App/capacitor.config.json'
-if os.path.exists(path):
-    d = json.load(open(path))
-    d['packageClassList'] = [
-        'AppPlugin', 'CAPBrowserPlugin', 'DevicePlugin',
-        'PreferencesPlugin', 'SharePlugin', 'TextToSpeechPlugin',
-        'RevenuecatPurchasesCapacitorPlugin'
-    ]
-    json.dump(d, open(path, 'w'), indent=2)
-    print('packageClassList written:', d['packageClassList'])
-else:
-    print('ERROR: capacitor.config.json not found at', path)
-EOF
-          python3 /tmp/fix_package_classlist.py
+          sed -i '' 's/}$/, "packageClassList": ["AppPlugin","CAPBrowserPlugin","DevicePlugin","PreferencesPlugin","SharePlugin","TextToSpeechPlugin","RevenuecatPurchasesCapacitorPlugin"]}/' ios/App/App/capacitor.config.json 2>/dev/null || true
+          grep packageClassList ios/App/App/capacitor.config.json
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
