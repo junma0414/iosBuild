@@ -28,13 +28,18 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
-          # 先 cap sync 生成完整 Podfile，再覆盖 Podfile 内容
           npx cap sync ios
-          # 用插件自动生成的 Podfile（包含所有 pod），不手动覆盖
-          # 只修改 iOS deployment target
-          sed -i '' "s/platform :ios, '.*'/platform :ios, '14.0'/" ios/App/Podfile 2>/dev/null || true
-          # 执行 pod install
           cd ios/App && pod install && ls -la
+          # Sync 后写入 packageClassList（SPM 模式不会自动生成）
+          /usr/libexec/PlistBuddy -c "Add :packageClassList array" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:0 string 'AppPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:1 string 'CAPBrowserPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:2 string 'DevicePlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:3 string 'PreferencesPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:4 string 'SharePlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:5 string 'TextToSpeechPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:6 string 'RevenuecatPurchasesCapacitorPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
+          cat ios/App/App/capacitor.config.json | python3 -c "import sys,json; d=json.load(sys.stdin); print('packageClassList:', d.get('packageClassList', 'NOT FOUND'))"
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
