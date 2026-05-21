@@ -36,8 +36,9 @@ workflows:
           EOF
           npx cap sync ios
           # 复制根目录 capacitor.config.json（包含 packageClassList）覆盖 iOS 项目
-          cp capacitor.config.json ios/App/App/capacitor.config.json
+          cp ../../capacitor.config.json ios/App/App/capacitor.config.json
           ls -la ios/App/
+          ls -la ios/App/App/capacitor.config.json
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
