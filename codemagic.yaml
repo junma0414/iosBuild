@@ -30,6 +30,23 @@ workflows:
           npx cap add ios
           npx cap sync ios
 
+          # 手动写入 packageClassList（SPM 模式下 cap sync 不会自动生成）
+          python3 << 'PYEOF'
+import json, os
+path = 'ios/App/App/capacitor.config.json'
+if os.path.exists(path):
+    d = json.load(open(path))
+    d['packageClassList'] = [
+        'AppPlugin', 'CAPBrowserPlugin', 'DevicePlugin',
+        'PreferencesPlugin', 'SharePlugin', 'TextToSpeechPlugin',
+        'RevenuecatPurchasesCapacitorPlugin'
+    ]
+    json.dump(d, open(path, 'w'), indent=2)
+    print('packageClassList written:', d['packageClassList'])
+else:
+    print('ERROR: capacitor.config.json not found at', path)
+PYEOF
+
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
           cat > ios/App/App/Base.lproj/Main.storyboard <<'EOF'
