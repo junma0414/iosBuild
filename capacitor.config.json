@@ -9,6 +9,14 @@
     "cleartext": false
   },
   "plugins": {
+    "CapacitorSocialLogin": {
+      "google": {
+        "iosClientId": "925702138089-qk3rm2dg8ig4ghase8ukiqv7avfto175.apps.googleusercontent.com",
+        "iosServerClientId": "925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com",
+        "serverClientId": "925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com"
+      },
+      "apple": {}
+    },
     "Browser": {
       "packageId": "com.lingumate.app"
     },
