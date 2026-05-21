@@ -279,6 +279,29 @@ const Login = () => {
     }
   }, []);
 
+  // iOS 调试信息
+  const [pluginStatus, setPluginStatus] = useState('');
+  useEffect(() => {
+    if (!isNativeApp() || !isIOS()) return;
+    const status = [];
+    status.push('Capacitor: ' + !!window.Capacitor);
+    status.push('Browser: ' + !!window.Capacitor?.Plugins?.Browser);
+    status.push('SignInWithApple: ' + !!window.Capacitor?.Plugins?.SignInWithApple);
+    status.push('App: ' + !!window.Capacitor?.Plugins?.App);
+    const platform = window.Capacitor?.getPlatform?.() || 'unknown';
+    status.push('Platform: ' + platform);
+    status.push('Protocol: ' + window.location.protocol);
+    setPluginStatus(status.join(' | '));
+    // 发送诊断日志到后端
+    try {
+      fetch('https://lang.omnifamily.cloud/api/auth/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'debug', message: 'plugin-status', data: status.join(' | ') }),
+      });
+    } catch (_) {}
+  }, []);
+
   const verifyEmail = async (token, emailParam) => {
     try {
       const response = await fetch('/api/auth/verify-email', {
@@ -510,6 +533,11 @@ const Login = () => {
     if (isNative && isIOS()) {
       try {
         const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
+        fetch('https://lang.omnifamily.cloud/api/auth/log', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ level: 'info', message: 'apple-login-start', data: { hasPlugin: !!SignInWithApple, hasCapacitor: !!window.Capacitor } }),
+        }).catch(() => {});
         if (!SignInWithApple) {
           throw new Error('SignInWithApple plugin not available');
         }
