@@ -29,12 +29,16 @@ workflows:
           rm -rf ios
           npx cap add ios
           mkdir -p ios/App
+          # 只写空的 Podfile 阻止 CocoaPods 安装依赖
           cat > ios/App/Podfile <<EOF
           platform :ios, '14.0'
           target 'App' do
           end
           EOF
-          npx cap sync ios
+          npx cap sync ios --deployment=false
+          # 确保 Podfile.lock 不存在，阻止 pod install
+          rm -f ios/App/Podfile.lock
+          rm -rf ios/App/Pods
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
