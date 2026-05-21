@@ -399,7 +399,7 @@ const Login = () => {
 
         // 与后端 GOOGLE_REDIRECT_URI 保持一致（不带 /api）
         const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
-        const stateId = uuidv4();
+        const stateId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
         // 存 stateId 用于 Browser 关闭后轮询
         localStorage.setItem('iosGoogleStateId', stateId);
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
