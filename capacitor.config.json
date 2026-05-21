@@ -35,5 +35,13 @@
   "android": {
     "allowMixedContent": true,
     "webContentsDebuggingEnabled": true
-  }
+  },
+  "packageClassList": [
+    "AppPlugin",
+    "CAPBrowserPlugin",
+    "DevicePlugin",
+    "PreferencesPlugin",
+    "SharePlugin",
+    "SignInWithApple"
+  ]
 }
