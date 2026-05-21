@@ -351,44 +351,28 @@ const Login = () => {
       }
     }
 
-    // ========== Native (iOS): @capgo/capacitor-social-login ==========
+    // ========== iOS: Capacitor Browser OAuth + backend fix redirect ==========
     if (isNative && isIOS()) {
       try {
-        const { SocialLogin } = await import('@capgo/capacitor-social-login');
-        const result = await SocialLogin.login({
-          provider: 'google',
-          options: {
-            scopes: ['email', 'profile', 'openid'],
-          },
-        });
-        const idToken = result?.result?.idToken;
-        if (!idToken) throw new Error('No identity token received from Google');
+        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+        if (!clientId) throw new Error('Google Client ID not configured');
 
-        const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/auth/google`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ idToken }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Google login failed');
+        // 与后端 GOOGLE_REDIRECT_URI 保持一致（不带 /api）
+        const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
 
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-          checkAuth();
-          navigate('/');
+        if (window.Capacitor?.Plugins?.Browser) {
+          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
+          setTimeout(() => setLoading(false), 15000);
         } else {
-          throw new Error('No access token received from server');
+          window.location.href = authUrl;
         }
         return;
       } catch (err) {
-        if (err.message?.includes('cancel') || err.message === 'USER_CANCELLED') {
-          console.log('Google Sign-In cancelled by user');
-          setLoading(false);
-          return;
-        }
-        console.error('Google Auth iOS error:', err);
+        console.error('Google login error:', err);
         setError(err.message || 'Google login failed');
         setLoading(false);
         return;
@@ -479,20 +463,25 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (iOS): use @capgo/capacitor-social-login Apple ==========
+    // ========== Native (iOS): use native SignInWithApple plugin ==========
     if (isNative && isIOS()) {
       try {
-        const { SocialLogin } = await import('@capgo/capacitor-social-login');
-        const result = await SocialLogin.login({
-          provider: 'apple',
-          options: {
-            scopes: ['name', 'email'],
-          },
+        const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
+        if (!SignInWithApple) {
+          throw new Error('SignInWithApple plugin not available');
+        }
+        const result = await SignInWithApple.authorize({
+          clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
+          redirectUri: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
+          scopes: 'email name',
         });
-        const idToken = result?.result?.idToken;
-        const fullName = result?.result?.profile?.name || null;
 
-        if (!idToken) {
+        const identityToken = result.response?.identityToken;
+        const fullName = result.response?.fullName
+          ? `${result.response.fullName.givenName || ''} ${result.response.fullName.familyName || ''}`.trim()
+          : null;
+
+        if (!identityToken) {
           throw new Error('No identity token received from Apple');
         }
 
@@ -500,7 +489,7 @@ const Login = () => {
         const res = await fetch(`${apiUrl}/auth/apple`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identityToken: idToken, fullName }),
+          body: JSON.stringify({ identityToken, fullName }),
         });
         const data = await res.json();
 

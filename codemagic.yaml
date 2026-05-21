@@ -36,24 +36,6 @@ workflows:
           EOF
           npx cap sync ios
           ls -la ios/App/
-          
-          # 注册 SocialLogin 插件 - 复制源码并添加到 pbxproj
-          mkdir -p ios/App/App/SocialLoginPlugin
-          cp -r node_modules/@capgo/capacitor-social-login/ios/Sources/SocialLoginPlugin/*.swift ios/App/App/SocialLoginPlugin/
-          ruby -e '
-          require "xcodeproj"
-          project = Xcodeproj::Project.open("ios/App/App.xcodeproj")
-          target = project.targets.find { |t| t.name == "App" }
-          group = project.main_group.find_subpath("App/SocialLoginPlugin", true)
-          group.set_source_tree("SOURCE_ROOT")
-          Dir["ios/App/App/SocialLoginPlugin/*.swift"].each do |f|
-            file = group.new_file(File.expand_path(f))
-            target.source_build_phase.add_file_reference(file, true)
-          end
-          project.save
-          ' 2>/dev/null || echo "ruby add skipped"
-          # 注册插件类
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:0 string 'SocialLoginPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
@@ -139,6 +121,20 @@ workflows:
                   return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
               }
           }
+          EOF
+
+          # 创建 entitlements（Sign in with Apple）
+          cat > ios/App/App/App.entitlements <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>com.apple.developer.applesignin</key>
+              <array>
+                  <string>Default</string>
+              </array>
+          </dict>
+          </plist>
           EOF
 
       - name: Increment build number
