@@ -569,47 +569,14 @@ const Login = () => {
         throw new Error('Failed to get Apple OAuth URL');
       }
 
-      // iOS fallback: Browser OAuth + polling
+      // iOS fallback: 直接跳转（Apple form_post 会通过 SPA callback 完成登录）
       if (isNative && isIOS()) {
-        const sessionId = 'apple_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
-        // 替换 Apple authUrl 中的 state=native 为 sessionId
-        const appleAuthUrl = data.authUrl.replace('state=native', 'state=' + sessionId);
-
         if (window.Capacitor?.Plugins?.Browser?.open) {
-          await window.Capacitor.Plugins.Browser.open({ url: appleAuthUrl });
+          await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
         } else {
-          window.open(appleAuthUrl, '_blank');
+          window.location.href = data.authUrl;
         }
-
-        const apiUrl = getApiUrl();
-        const start = Date.now();
-        const maxWait = 300000;
-        let polled = false;
-
-        while (Date.now() - start < maxWait) {
-          await new Promise(r => setTimeout(r, 1500));
-          try {
-            const res = await fetch(`${apiUrl}/auth/poll-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stateId: sessionId }),
-            });
-            const data = await res.json();
-            if (data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-              polled = true;
-              checkAuth();
-              navigate('/');
-              break;
-            }
-          } catch (_) {}
-        }
-
-        if (!polled) {
-          setLoading(false);
-          setError('Login timed out. Please try again.');
-        }
+        return;
       } else {
         window.location.href = data.authUrl;
       }
