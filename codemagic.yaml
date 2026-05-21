@@ -30,16 +30,21 @@ workflows:
           npx cap add ios
           npx cap sync ios
           cd ios/App && pod install && ls -la
-          # Sync 后写入 packageClassList（SPM 模式不会自动生成）
-          /usr/libexec/PlistBuddy -c "Add :packageClassList array" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:0 string 'AppPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:1 string 'CAPBrowserPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:2 string 'DevicePlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:3 string 'PreferencesPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:4 string 'SharePlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:5 string 'TextToSpeechPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          /usr/libexec/PlistBuddy -c "Add :packageClassList:6 string 'RevenuecatPurchasesCapacitorPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
-          cat ios/App/App/capacitor.config.json | python3 -c "import sys,json; d=json.load(sys.stdin); print('packageClassList:', d.get('packageClassList', 'NOT FOUND'))"
+          # 找 capacitor.config.json 的实际位置
+          find ios -name "capacitor.config.json" -maxdepth 5 2>/dev/null
+          CAP_CONFIG=$(find ios -name "capacitor.config.json" -maxdepth 5 2>/dev/null | head -1)
+          echo "Found cap config at: $CAP_CONFIG"
+          if [ -n "$CAP_CONFIG" ]; then
+            /usr/libexec/PlistBuddy -c "Add :packageClassList array" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:0 string 'AppPlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:1 string 'CAPBrowserPlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:2 string 'DevicePlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:3 string 'PreferencesPlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:4 string 'SharePlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:5 string 'TextToSpeechPlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            /usr/libexec/PlistBuddy -c "Add :packageClassList:6 string 'RevenuecatPurchasesCapacitorPlugin'" "$CAP_CONFIG" 2>/dev/null || true
+            python3 -c "import sys,json; d=json.load(open('$CAP_CONFIG')); print('packageClassList:', d.get('packageClassList', 'NOT FOUND'))"
+          fi
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
