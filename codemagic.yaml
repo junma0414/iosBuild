@@ -28,7 +28,12 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
-          # 先让 cap sync 生成完整的 Podfile（包含所有插件 pod）
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
           npx cap sync ios
           ls -la ios/App/
 
@@ -98,7 +103,13 @@ workflows:
           @UIApplicationMain
           class AppDelegate: UIResponder, UIApplicationDelegate {
 
+              var window: UIWindow?
+
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  window = UIWindow(frame: UIScreen.main.bounds)
+                  let bridgeViewController = CAPBridgeViewController()
+                  window?.rootViewController = bridgeViewController
+                  window?.makeKeyAndVisible()
                   return true
               }
 
