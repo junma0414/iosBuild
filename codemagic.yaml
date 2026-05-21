@@ -29,9 +29,7 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
-          # 进入 iOS 目录执行 pod install
-          cd ios/App
-          pod install
+          cd ios/App && pod install
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
