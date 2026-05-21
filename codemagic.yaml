@@ -30,8 +30,8 @@ workflows:
           npx cap add ios
           npx cap sync ios
 
-          # 手动写入 packageClassList（SPM 模式下 cap sync 不会自动生成）
-          python3 << 'PYEOF'
+          # 手动写入 packageClassList
+          python3 -c "
 import json, os
 path = 'ios/App/App/capacitor.config.json'
 if os.path.exists(path):
@@ -45,7 +45,7 @@ if os.path.exists(path):
     print('packageClassList written:', d['packageClassList'])
 else:
     print('ERROR: capacitor.config.json not found at', path)
-PYEOF
+"
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
