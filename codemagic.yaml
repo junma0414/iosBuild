@@ -28,23 +28,7 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
-          mkdir -p ios/App
-          cat > ios/App/Podfile <<EOF
-          platform :ios, '14.0'
-          target 'App' do
-          end
-          EOF
           npx cap sync ios
-          # 复制根目录 capacitor.config.json（包含 packageClassList）覆盖 iOS 项目
-          # 尝试多个可能的位置
-          for f in ../../../capacitor.config.json ../../capacitor.config.json ../capacitor.config.json /Users/builder/clone/capacitor.config.json; do
-            if [ -f "$f" ]; then
-              echo "Found capacitor.config.json at: $f"
-              cp "$f" "ios/App/App/capacitor.config.json"
-              break
-            fi
-          done
-          ls -la ios/App/App/capacitor.config.json 2>/dev/null || echo "capacitor.config.json not found in ios/App/App"
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
@@ -115,10 +99,6 @@ workflows:
               var window: UIWindow?
 
               func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  window = UIWindow(frame: UIScreen.main.bounds)
-                  let bridgeViewController = CAPBridgeViewController()
-                  window?.rootViewController = bridgeViewController
-                  window?.makeKeyAndVisible()
                   return true
               }
 
