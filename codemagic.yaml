@@ -28,14 +28,13 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
-          mkdir -p ios/App
-          cat > ios/App/Podfile <<EOF
-          platform :ios, '14.0'
-          target 'App' do
-          end
-          EOF
+          # 先 cap sync 生成完整 Podfile，再覆盖 Podfile 内容
           npx cap sync ios
-          ls -la ios/App/
+          # 用插件自动生成的 Podfile（包含所有 pod），不手动覆盖
+          # 只修改 iOS deployment target
+          sed -i '' "s/platform :ios, '.*'/platform :ios, '14.0'/" ios/App/Podfile 2>/dev/null || true
+          # 执行 pod install
+          cd ios/App && pod install && ls -la
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
@@ -140,6 +139,8 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
+          echo "=== Build directory ==="
+          ls -la *.xcodeproj *.xcworkspace 2>&1
           xcode-project build-ipa \
             --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
