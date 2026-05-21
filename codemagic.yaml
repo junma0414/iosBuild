@@ -147,6 +147,16 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
+          echo "=== Checking project files ==="
+          ls -la *.xcodeproj 2>&1
+          ls -la *.xcworkspace 2>&1
+          echo "=== xcodeproj contents ==="
+          ls -la *.xcodeproj/ 2>&1 || true
+          echo "=== Scheme list ==="
+          xcodebuild -list 2>&1
+          echo "=== Build settings ==="
+          xcodebuild -project App.xcodeproj -scheme "$XCODE_SCHEME" -showBuildSettings 2>&1
+          echo "=== Build IPA ==="
           xcode-project build-ipa \
             --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
