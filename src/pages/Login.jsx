@@ -154,104 +154,36 @@ const Login = () => {
   useEffect(() => {
     if (!isNativeApp() || !isIOS()) return;
     if (window.Capacitor?.Plugins?.Browser) {
-      window.Capacitor.Plugins.Browser.addListener('browserFinished', async () => {
+      window.Capacitor.Plugins.Browser.addListener('browserFinished', () => {
         setLoading(false);
-        // 尝试轮询 iOS 待取 token
-        const stateId = localStorage.getItem('iosGoogleStateId');
-        if (stateId) {
-          localStorage.removeItem('iosGoogleStateId');
-          const apiUrl = getApiUrl();
-          try {
-            const res = await fetch(`${apiUrl}/auth/poll-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stateId }),
-            });
-            const data = await res.json();
-            if (data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-              checkAuth();
-              navigate('/');
-              return;
-            }
-          } catch (_) { /* no pending token */ }
-        }
-        const appleStateId = localStorage.getItem('iosAppleStateId');
-        if (appleStateId) {
-          localStorage.removeItem('iosAppleStateId');
-          const apiUrl = getApiUrl();
-          try {
-            const res = await fetch(`${apiUrl}/auth/poll-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stateId: appleStateId, provider: 'apple' }),
-            });
-            const data = await res.json();
-            if (data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-              checkAuth();
-              navigate('/');
-            }
-          } catch (_) { /* no pending token */ }
-        }
       });
-      window.Capacitor.Plugins.Browser.addListener('browserPageLoaded', () => {
-        // no-op
-      });
+      window.Capacitor.Plugins.Browser.addListener('browserPageLoaded', () => {});
     }
     return () => {
       if (window.Capacitor?.Plugins?.Browser) {
         window.Capacitor.Plugins.Browser.removeAllListeners();
       }
     };
-  }, [checkAuth, navigate]);
+  }, []);
 
+  // iOS 插件诊断（仅用于调试）
   useEffect(() => {
-    if (contextAuthError) {
-      let errorMsg = contextAuthError.message || 'Authentication failed';
-      if (typeof errorMsg === 'string' && errorMsg.includes('"error"')) {
-        try {
-          const parsed = JSON.parse(errorMsg);
-          errorMsg = parsed.error || parsed.message || errorMsg;
-        } catch (e) {}
-      }
-      setServerError(errorMsg);
-      const timer = setTimeout(() => setServerError(''), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [contextAuthError]);
-
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/');
-    }
-  }, [isAuthenticated, navigate]);
-
-  useEffect(() => {
-    if (isNativeApp()) return;
-    if (googleSDKLoaded || googleSDKInitializing) return;
-    const loadGoogleSDK = () => {
-      googleSDKInitializing = true;
-      if (window.google?.accounts?.id) {
-        googleSDKLoaded = true;
-        googleSDKInitializing = false;
-        return;
-      }
-      const oldScript = document.getElementById('google-oauth-script');
-      if (oldScript) oldScript.remove();
-      const script = document.createElement('script');
-      script.id = 'google-oauth-script';
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = () => { googleSDKLoaded = true; googleSDKInitializing = false; };
-      script.onerror = () => { googleSDKInitializing = false; };
-      document.head.appendChild(script);
-    };
-    loadGoogleSDK();
-    return () => { googleInitializedRef.current = false; };
+    if (!isNativeApp() || !isIOS()) return;
+    const status = [];
+    status.push('Capacitor: ' + !!window.Capacitor);
+    status.push('Browser: ' + !!window.Capacitor?.Plugins?.Browser);
+    status.push('SignInWithApple: ' + !!window.Capacitor?.Plugins?.SignInWithApple);
+    status.push('App: ' + !!window.Capacitor?.Plugins?.App);
+    const platform = window.Capacitor?.getPlatform?.() || 'unknown';
+    status.push('Platform: ' + platform);
+    status.push('Protocol: ' + window.location.protocol);
+    try {
+      fetch('https://lang.omnifamily.cloud/api/auth/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'debug', message: 'plugin-status', data: status.join(' | ') }),
+      });
+    } catch (_) {}
   }, []);
 
   const handleGoogleCredential = async (credential) => {
@@ -414,27 +346,55 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: Capacitor Browser OAuth + backend fix redirect ==========
+    // ========== iOS: Browser OAuth + server-side session polling ==========
     if (isNative && isIOS()) {
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
 
-        // 与后端 GOOGLE_REDIRECT_URI 保持一致（不带 /api）
         const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
-        const stateId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
-        // 存 stateId 用于 Browser 关闭后轮询
-        localStorage.setItem('iosGoogleStateId', stateId);
+        const sessionId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${clientId}&` +
           `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=${stateId}`;
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=${sessionId}`;
 
-        if (window.Capacitor?.Plugins?.Browser) {
+        // 打开浏览器（无论插件是否可用，都尝试打开）
+        if (window.Capacitor?.Plugins?.Browser?.open) {
           await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-          setTimeout(() => setLoading(false), 15000);
         } else {
-          window.location.href = authUrl;
+          window.open(authUrl, '_blank');
+        }
+
+        // 轮询等待服务端 session token
+        const apiUrl = getApiUrl();
+        const start = Date.now();
+        const maxWait = 300000; // 5分钟
+        let polled = false;
+
+        while (Date.now() - start < maxWait) {
+          await new Promise(r => setTimeout(r, 1500));
+          try {
+            const res = await fetch(`${apiUrl}/auth/poll-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ stateId: sessionId }),
+            });
+            const data = await res.json();
+            if (data.accessToken) {
+              localStorage.setItem('accessToken', data.accessToken);
+              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+              polled = true;
+              checkAuth();
+              navigate('/');
+              break;
+            }
+          } catch (_) {}
+        }
+
+        if (!polled) {
+          setLoading(false);
+          setError('Login timed out. Please try again.');
         }
         return;
       } catch (err) {
@@ -609,9 +569,47 @@ const Login = () => {
         throw new Error('Failed to get Apple OAuth URL');
       }
 
-      if (isNative && window.Capacitor?.Plugins?.Browser) {
-        await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
-        setTimeout(() => setLoading(false), 15000);
+      // iOS fallback: Browser OAuth + polling
+      if (isNative && isIOS()) {
+        const sessionId = 'apple_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+        // 替换 Apple authUrl 中的 state=native 为 sessionId
+        const appleAuthUrl = data.authUrl.replace('state=native', 'state=' + sessionId);
+
+        if (window.Capacitor?.Plugins?.Browser?.open) {
+          await window.Capacitor.Plugins.Browser.open({ url: appleAuthUrl });
+        } else {
+          window.open(appleAuthUrl, '_blank');
+        }
+
+        const apiUrl = getApiUrl();
+        const start = Date.now();
+        const maxWait = 300000;
+        let polled = false;
+
+        while (Date.now() - start < maxWait) {
+          await new Promise(r => setTimeout(r, 1500));
+          try {
+            const res = await fetch(`${apiUrl}/auth/poll-token`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ stateId: sessionId }),
+            });
+            const data = await res.json();
+            if (data.accessToken) {
+              localStorage.setItem('accessToken', data.accessToken);
+              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+              polled = true;
+              checkAuth();
+              navigate('/');
+              break;
+            }
+          } catch (_) {}
+        }
+
+        if (!polled) {
+          setLoading(false);
+          setError('Login timed out. Please try again.');
+        }
       } else {
         window.location.href = data.authUrl;
       }
