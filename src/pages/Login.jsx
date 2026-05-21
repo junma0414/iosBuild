@@ -351,27 +351,60 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: use Capacitor Browser OAuth (fallback to Web GIS popup) ==========
+    // ========== iOS: use ASWebAuthenticationSession via generic-oauth2 ==========
     if (isNative && isIOS()) {
       try {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId) throw new Error('Google Client ID not configured');
+        const iosClientId = import.meta.env.VITE_GOOGLE_IOS_CLIENT_ID;
+        if (!iosClientId) throw new Error('Google iOS Client ID not configured');
 
-        const redirectUri = `${import.meta.env.VITE_API_URL || 'https://lang.omnifamily.cloud/api'}/auth/google/callback`;
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
+        const { GenericOAuth2 } = await import('@capacitor-community/generic-oauth2');
+        const result = await GenericOAuth2.authenticate({
+          appId: iosClientId,
+          authorizationBaseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+          accessTokenEndpoint: '',
+          responseType: 'code',
+          scope: 'email profile openid',
+          pkceEnabled: false,
+          redirectUrl: 'com.lingumate.omnifamily://login',
+          additionalParameters: {
+            access_type: 'offline',
+            prompt: 'select_account',
+            state: 'app',
+          },
+          ios: {
+            siwaUseScope: false,
+          },
+        });
 
-        if (window.Capacitor?.Plugins?.Browser) {
-          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-          setTimeout(() => setLoading(false), 15000);
+        const code = result.authorization_code || result.code;
+        if (!code) throw new Error('No authorization code received from Google');
+
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/auth/google/ios`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, redirectUri: 'com.lingumate.omnifamily://login' }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) throw new Error(data.error || 'Google login failed');
+
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          checkAuth();
+          navigate('/');
         } else {
-          window.location.href = authUrl;
+          throw new Error('No access token received from server');
         }
         return;
       } catch (err) {
-        console.error('Google login error:', err);
+        if (err.message?.includes('cancel') || err.code === 'CANCELED') {
+          console.log('Google Sign-In cancelled by user');
+          setLoading(false);
+          return;
+        }
+        console.error('Google Auth iOS error:', err);
         setError(err.message || 'Google login failed');
         setLoading(false);
         return;

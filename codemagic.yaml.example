@@ -1,0 +1,69 @@
+workflows:
+  ios-release-workflow:
+    name: iOS Build for App Store Connect
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      groups:
+        - ios_credentials
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.lingumate.app
+      vars:
+        XCODE_SCHEME: "App"
+      node: latest
+      xcode: latest
+
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: |
+          cp .env.production .env
+          NODE_ENV=production npm run build
+
+      - name: Setup iOS project
+        script: |
+          rm -rf ios
+          npx cap add ios
+          # 创建空 Podfile 以避免 cap sync 报错
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
+          npx cap sync ios
+          # 确认项目文件存在
+          ls -la ios/App/
+
+      - name: Configure code signing
+        script: |
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build and export IPA
+        script: |
+          cd ios/App
+          xcode-project build-ipa \
+            --project "App.xcodeproj" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - ios/App/build/ios/ipa/*.ipa
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+
+      email:
+        recipients:
+          - junma0614@gmail.com
+        notify:
+          success: true
+          failure: true
