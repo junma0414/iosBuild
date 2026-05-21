@@ -28,9 +28,32 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
           npx cap sync ios
-          cd ios/App && pod install
           ls -la ios/App/
+          
+          # 注册 SocialLogin 插件 - 复制源码并添加到 pbxproj
+          mkdir -p ios/App/App/SocialLoginPlugin
+          cp -r node_modules/@capgo/capacitor-social-login/ios/Sources/SocialLoginPlugin/*.swift ios/App/App/SocialLoginPlugin/
+          ruby -e '
+          require "xcodeproj"
+          project = Xcodeproj::Project.open("ios/App/App.xcodeproj")
+          target = project.targets.find { |t| t.name == "App" }
+          group = project.main_group.find_subpath("App/SocialLoginPlugin", true)
+          group.set_source_tree("SOURCE_ROOT")
+          Dir["ios/App/App/SocialLoginPlugin/*.swift"].each do |f|
+            file = group.new_file(File.expand_path(f))
+            target.source_build_phase.add_file_reference(file, true)
+          end
+          project.save
+          ' 2>/dev/null || echo "ruby add skipped"
+          # 注册插件类
+          /usr/libexec/PlistBuddy -c "Add :packageClassList:0 string 'SocialLoginPlugin'" ios/App/App/capacitor.config.json 2>/dev/null || true
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
