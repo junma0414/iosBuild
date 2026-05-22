@@ -27,12 +27,12 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
-          rm -rf ~/Library/Caches/CocoaPods ~/.cocoapods
-          npx cap add ios
-          mkdir -p ios/App
-          npx cap sync ios
-          # 手动创建包含所有插件 pod 的 Podfile，然后 pod install
-          cat > ios/App/Podfile <<'EOF'
+
+          # 先加平台，指定用 CocoaPods
+          npx cap add ios --packagemanager CocoaPods
+
+          # 在 sync 之前创建 Podfile，sync 会基于它更新
+          cat > ios/App/Podfile <<'PODEOF'
           install! 'cocoapods', :disable_input_output_paths => true, :deterministic_uuids => false
           platform :ios, '15.0'
           target 'App' do
@@ -47,8 +47,17 @@ workflows:
             pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
           end
-          EOF
-          cd ios/App && pod install && ls -la
+          PODEOF
+
+          # sync（此时不再生成 SPM，因为 Podfile 已存在）
+          npx cap sync ios
+
+          # pod install
+          cd ios/App && pod install
+          cd ../..
+
+          # 验证 workspace 存在
+          ls -la ios/App/App.xcworkspace || echo "ERROR: xcworkspace not found"
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
@@ -68,8 +77,7 @@ workflows:
               </scenes>
           </document>
           EOF
-          
-          # 创建正确的 LaunchScreen.storyboard
+
           cat > ios/App/App/Base.lproj/LaunchScreen.storyboard <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
@@ -105,10 +113,10 @@ workflows:
               </scenes>
           </document>
           EOF
-          
+
           /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist
-          
+
           cat > ios/App/App/AppDelegate.swift <<'EOF'
           import UIKit
           import Capacitor
