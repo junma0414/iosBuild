@@ -27,118 +27,9 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
-
-          # 先加平台，指定用 CocoaPods
-          npx cap add ios --packagemanager CocoaPods
-
-          # 在 sync 之前创建 Podfile，sync 会基于它更新
-          cat > ios/App/Podfile <<'PODEOF'
-          install! 'cocoapods', :disable_input_output_paths => true, :deterministic_uuids => false
-          platform :ios, '15.0'
-          target 'App' do
-            use_frameworks! :linkage => :static
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios', :modular_headers => true
-            pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
-            pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
-            pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
-            pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
-            pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
-            pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
-            pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
-          end
-          PODEOF
-
-          # sync（此时不再生成 SPM，因为 Podfile 已存在）
+          npx cap add ios
           npx cap sync ios
-
-          # pod install
-          cd ios/App && pod install
-          cd ../..
-
-          # 验证 workspace 存在
-          ls -la ios/App/App.xcworkspace || echo "ERROR: xcworkspace not found"
-
-          # 创建正确的 Main.storyboard
-          mkdir -p ios/App/App/Base.lproj
-          cat > ios/App/App/Base.lproj/Main.storyboard <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
-              <dependencies>
-                  <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
-              </dependencies>
-              <scenes>
-                  <scene sceneID="tne-QT-ifu">
-                      <objects>
-                          <viewController id="BYZ-38-t0r" customClass="CAPBridgeViewController" customModule="Capacitor" sceneMemberID="viewController"/>
-                          <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
-                      </objects>
-                  </scene>
-              </scenes>
-          </document>
-          EOF
-
-          cat > ios/App/App/Base.lproj/LaunchScreen.storyboard <<'EOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
-              <dependencies>
-                  <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
-              </dependencies>
-              <scenes>
-                  <scene sceneID="EHf-IW-A2E">
-                      <objects>
-                          <viewController id="01J-lp-oVM" sceneMemberID="viewController">
-                              <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
-                                  <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
-                                  <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
-                                  <subviews>
-                                      <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Loading..." textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lwH-C2-qbZ">
-                                          <rect key="frame" x="264" y="289" width="72" height="21"/>
-                                          <fontDescription key="fontDescription" type="system" pointSize="17"/>
-                                          <nil key="textColor"/>
-                                          <nil key="highlightedColor"/>
-                                      </label>
-                                  </subviews>
-                                  <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
-                                  <constraints>
-                                      <constraint firstItem="lwH-C2-qbZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="X0l-lz-1Nv"/>
-                                      <constraint firstItem="lwH-C2-qbZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="vO0-Hf-9qJ"/>
-                                  </constraints>
-                              </view>
-                          </viewController>
-                          <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
-                      </objects>
-                      <point key="canvasLocation" x="53" y="375"/>
-                  </scene>
-              </scenes>
-          </document>
-          EOF
-
-          /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist
-          /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist
-
-          cat > ios/App/App/AppDelegate.swift <<'EOF'
-          import UIKit
-          import Capacitor
-
-          @UIApplicationMain
-          class AppDelegate: UIResponder, UIApplicationDelegate {
-
-              var window: UIWindow?
-
-              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-                  return true
-              }
-
-              func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-                  return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
-              }
-
-              func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
-                  return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
-              }
-          }
-          EOF
+          ls -la ios/App/
 
       - name: Increment build number
         script: |
@@ -158,7 +49,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
+            --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
