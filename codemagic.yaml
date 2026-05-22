@@ -47,7 +47,7 @@ workflows:
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
           end
           EOF
-          cd ios/App && pod install && ls -la
+          cd ios/App && pod install && rm -rf CapApp-SPM && ls -la
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
