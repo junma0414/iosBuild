@@ -33,6 +33,7 @@ workflows:
           npx cap sync ios
           # 手动创建包含所有插件 pod 的 Podfile，然后 pod install
           cat > ios/App/Podfile <<'EOF'
+          install! 'cocoapods', :disable_input_output_paths => true, :deterministic_uuids => false
           platform :ios, '15.0'
           target 'App' do
             use_frameworks! :linkage => :static
@@ -47,10 +48,7 @@ workflows:
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
           end
           EOF
-          cd ios/App && pod install && rm -rf CapApp-SPM
-          # 从 workspace 中移除 CapApp-SPM 的引用
-          sed -i '' '/CapApp-SPM/d' App.xcworkspace/contents.xcworkspacedata 2>/dev/null || true
-          ls -la
+          cd ios/App && pod install && ls -la
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
