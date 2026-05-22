@@ -30,7 +30,7 @@ workflows:
           npx cap add ios
           mkdir -p ios/App
           npx cap sync ios
-          cd ios/App && pod install && ls -la
+          ls -la ios/App/
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
