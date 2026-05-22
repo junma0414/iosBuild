@@ -29,6 +29,18 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
+          # SPM 模式下需要手动注册插件
+          python3 -c "
+import json, os
+path = 'ios/App/App/capacitor.config.json'
+if os.path.exists(path):
+    d = json.load(open(path))
+    d['packageClassList'] = ['AppPlugin','CAPBrowserPlugin','DevicePlugin','PreferencesPlugin','SharePlugin','TextToSpeechPlugin','RevenuecatPurchasesCapacitorPlugin']
+    json.dump(d, open(path, 'w'), indent=2)
+    print('packageClassList:', d.get('packageClassList'))
+else:
+    print('ERROR: file not found')
+" || echo "python failed, trying sed"
           ls -la ios/App/
 
       - name: Increment build number
