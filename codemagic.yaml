@@ -27,6 +27,7 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
+          rm -rf ~/Library/Caches/CocoaPods ~/.cocoapods
           npx cap add ios
           mkdir -p ios/App
           npx cap sync ios
