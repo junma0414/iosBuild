@@ -30,8 +30,22 @@ workflows:
           npx cap add ios
           mkdir -p ios/App
           npx cap sync ios
-          ls -la ios/App/
-          ls -la ios/App/
+          # 手动创建包含所有插件 pod 的 Podfile，然后 pod install
+          cat > ios/App/Podfile <<'EOF'
+          platform :ios, '14.0'
+          target 'App' do
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
+            pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
+            pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
+            pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
+            pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
+            pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
+            pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
+          end
+          EOF
+          cd ios/App && pod install && ls -la
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
