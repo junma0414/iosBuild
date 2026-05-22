@@ -47,7 +47,10 @@ workflows:
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
           end
           EOF
-          cd ios/App && pod install && rm -rf CapApp-SPM && ls -la
+          cd ios/App && pod install && rm -rf CapApp-SPM
+          # 从 workspace 中移除 CapApp-SPM 的引用
+          sed -i '' '/CapApp-SPM/d' App.xcworkspace/contents.xcworkspacedata 2>/dev/null || true
+          ls -la
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
