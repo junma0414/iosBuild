@@ -33,10 +33,10 @@ workflows:
           # 手动创建包含所有插件 pod 的 Podfile，然后 pod install
           cat > ios/App/Podfile <<'EOF'
           platform :ios, '15.0'
-          use_modular_headers!
           target 'App' do
+            use_frameworks! :linkage => :static
             pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios', :modular_headers => true
             pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
             pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
             pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
