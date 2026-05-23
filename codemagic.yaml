@@ -30,7 +30,9 @@ workflows:
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
+          # 删除 cap sync 之前可能生成的 SPM 工件
           npx cap sync ios
+          rm -rf ios/CapApp-SPM
           # 修改 deployment target 并禁用 Pod 签名
           sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile
           echo "
