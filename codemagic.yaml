@@ -31,11 +31,6 @@ workflows:
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
           npx cap sync ios
-          # 删除 CocoaPods build phases
-          sed -i '' '/Embed Pods Frameworks/d' ios/App/App.xcodeproj/project.pbxproj
-          sed -i '' '/Copy Pods Resources/d' ios/App/App.xcodeproj/project.pbxproj
-          sed -i '' '/Check Pods Manifest.lock/d' ios/App/App.xcodeproj/project.pbxproj
-          # 删除 Podfile/Pods 残留
           rm -rf ios/App/Pods ios/App/Podfile ios/App/Podfile.lock
           ls -la ios/App/
 
