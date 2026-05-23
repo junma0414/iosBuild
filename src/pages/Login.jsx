@@ -346,56 +346,57 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: Browser OAuth + server-side session polling ==========
+    // ========== iOS: Google Identity Services (GIS) popup ==========
     if (isNative && isIOS()) {
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
 
-        const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
-        const sessionId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=${sessionId}`;
-
-        // 打开浏览器（无论插件是否可用，都尝试打开）
-        if (window.Capacitor?.Plugins?.Browser?.open) {
-          await window.Capacitor.Plugins.Browser.open({ url: authUrl });
-        } else {
-          window.open(authUrl, '_blank');
+        if (!window.google?.accounts) {
+          await new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            script.defer = true;
+            script.onload = resolve;
+            script.onerror = reject;
+            document.head.appendChild(script);
+          });
         }
 
-        // 轮询等待服务端 session token
         const apiUrl = getApiUrl();
-        const start = Date.now();
-        const maxWait = 300000; // 5分钟
-        let polled = false;
-
-        while (Date.now() - start < maxWait) {
-          await new Promise(r => setTimeout(r, 1500));
-          try {
-            const res = await fetch(`${apiUrl}/auth/poll-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stateId: sessionId }),
-            });
-            const data = await res.json();
-            if (data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-              polled = true;
-              checkAuth();
-              navigate('/');
-              break;
-            }
-          } catch (_) {}
-        }
-
-        if (!polled) {
-          setLoading(false);
-          setError('Login timed out. Please try again.');
-        }
+        await new Promise((resolve, reject) => {
+          const client = google.accounts.oauth2.initCodeClient({
+            client_id: clientId,
+            scope: 'email profile openid',
+            ux_mode: 'popup',
+            callback: async (response) => {
+              try {
+                if (response.error) return reject(new Error(response.error_description || response.error));
+                const res = await fetch(`${apiUrl}/auth/google/callback`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ code: response.code }),
+                });
+                const data = await res.json();
+                if (!res.ok) return reject(new Error(data.error || 'Google login failed'));
+                if (data.accessToken) {
+                  localStorage.setItem('accessToken', data.accessToken);
+                  if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+                  checkAuth();
+                  navigate('/');
+                  resolve();
+                } else {
+                  reject(new Error('No access token received from server'));
+                }
+              } catch (err) {
+                reject(err);
+              }
+            },
+            error_callback: (err) => reject(new Error(err.message || 'Google login failed')),
+          });
+          client.requestCode();
+        });
         return;
       } catch (err) {
         console.error('Google login error:', err);
@@ -489,66 +490,57 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (iOS): use native SignInWithApple plugin ==========
+    // ========== Native (iOS): SignInWithApple plugin (if available) ==========
     if (isNative && isIOS()) {
       try {
         const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
-        fetch('https://lang.omnifamily.cloud/api/auth/log', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ level: 'info', message: 'apple-login-start', data: { hasPlugin: !!SignInWithApple, hasCapacitor: !!window.Capacitor } }),
-        }).catch(() => {});
-        if (!SignInWithApple) {
-          throw new Error('SignInWithApple plugin not available');
+        if (SignInWithApple) {
+          const result = await SignInWithApple.authorize({
+            clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
+            redirectUri: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
+            scopes: 'email name',
+          });
+
+          const identityToken = result.response?.identityToken;
+          const fullName = result.response?.fullName
+            ? `${result.response.fullName.givenName || ''} ${result.response.fullName.familyName || ''}`.trim()
+            : null;
+
+          if (!identityToken) throw new Error('No identity token received from Apple');
+
+          const apiUrl = getApiUrl();
+          const res = await fetch(`${apiUrl}/auth/apple`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ identityToken, fullName }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Apple login failed');
+
+          if (data.accessToken) {
+            localStorage.setItem('accessToken', data.accessToken);
+            if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+            checkAuth();
+            navigate('/');
+          } else {
+            throw new Error('No access token received from server');
+          }
+          return;
         }
-        const result = await SignInWithApple.authorize({
-          clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
-          redirectUri: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
-          scopes: 'email name',
-        });
-
-        const identityToken = result.response?.identityToken;
-        const fullName = result.response?.fullName
-          ? `${result.response.fullName.givenName || ''} ${result.response.fullName.familyName || ''}`.trim()
-          : null;
-
-        if (!identityToken) {
-          throw new Error('No identity token received from Apple');
-        }
-
-        const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/auth/apple`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ identityToken, fullName }),
-        });
-        const data = await res.json();
-
-        if (!res.ok) {
-          throw new Error(data.error || 'Apple login failed');
-        }
-
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-          checkAuth();
-          navigate('/');
-        } else {
-          throw new Error('No access token received from server');
-        }
-        return;
       } catch (err) {
         if (err.message?.includes('cancel') || err.code === 'userCancelled') {
-          console.log('Apple Sign-In cancelled by user');
           setLoading(false);
           return;
         }
         console.error('Apple Sign-In native error:', err);
-        // Fall through to Browser-based OAuth
       }
+      // SignInWithApple 不可用: 提示用户用其他方式
+      setError('Apple Sign-In is not available on this device. Please use Google or email to sign in.');
+      setLoading(false);
+      return;
     }
 
-    // ========== Web / Fallback: Browser OAuth ==========
+    // ========== Web: Apple OAuth ==========
     try {
       const clientId = import.meta.env.VITE_APPLE_CLIENT_ID;
       if (!clientId) {
@@ -569,17 +561,7 @@ const Login = () => {
         throw new Error('Failed to get Apple OAuth URL');
       }
 
-      // iOS fallback: 直接跳转（Apple form_post 会通过 SPA callback 完成登录）
-      if (isNative && isIOS()) {
-        if (window.Capacitor?.Plugins?.Browser?.open) {
-          await window.Capacitor.Plugins.Browser.open({ url: data.authUrl });
-        } else {
-          window.location.href = data.authUrl;
-        }
-        return;
-      } else {
-        window.location.href = data.authUrl;
-      }
+      window.location.href = data.authUrl;
     } catch (err) {
       console.error('Apple login error:', err);
       setError(err.message || 'Apple login failed');

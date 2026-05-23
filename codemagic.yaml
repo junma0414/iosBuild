@@ -29,8 +29,6 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
-          # SPM 模式下需要手动注册插件
-          python3 -c "import json,os;d=json.load(open('ios/App/App/capacitor.config.json'));d['packageClassList']=['AppPlugin','CAPBrowserPlugin','DevicePlugin','PreferencesPlugin','SharePlugin','TextToSpeechPlugin','RevenuecatPurchasesCapacitorPlugin'];json.dump(d,open('ios/App/App/capacitor.config.json','w'),indent=2);print('packageClassList:',d.get('packageClassList'))"
           ls -la ios/App/
 
       - name: Increment build number
