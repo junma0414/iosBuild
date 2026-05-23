@@ -27,11 +27,12 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
-          rm -rf ~/Library/Developer/Xcode/DerivedData
-          rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
+          # 修改 deployment target 为 15.0（CapacitorGoogleSignIn 需要）
+          sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
           npx cap sync ios
-          rm -rf ios/App/Pods ios/App/Podfile ios/App/Podfile.lock
+          cd ios/App && pod install
+          cd ../..
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
