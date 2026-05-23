@@ -61,6 +61,8 @@ workflows:
           # sync（Podfile 已存在，cap sync 会自动执行 pod install，但我们在下一步手动执行）
           npx cap sync ios --deployment=false
           cd ios/App && pod install --repo-update
+          # pod install 后删除 workspace，直接用 project 构建
+          rm -rf App.xcworkspace
           cd ../..
           ls -la ios/App/
 
@@ -82,7 +84,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
+            --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
