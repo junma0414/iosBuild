@@ -27,13 +27,14 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
+          # 修改 deployment target 为 15.0（CapacitorGoogleSignIn 需要）
+          sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
           npx cap sync ios
-          # 清理 CocoaPods 残留并移除 build phase
-          rm -rf ios/App/Pods ios/App/Podfile ios/App/Podfile.lock
-          sed -i '' '/Embed Pods Frameworks/d' ios/App/App.xcodeproj/project.pbxproj 2>/dev/null || true
-          sed -i '' '/Copy Pods Resources/d' ios/App/App.xcodeproj/project.pbxproj 2>/dev/null || true
-          sed -i '' '/Check Pods Manifest.lock/d' ios/App/App.xcodeproj/project.pbxproj 2>/dev/null || true
+          cd ios/App && pod install
+          cd ../..
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
@@ -140,7 +141,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --project "App.xcodeproj" \
+            --workspace "App.xcworkspace" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
