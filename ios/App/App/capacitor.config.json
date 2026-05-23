@@ -1,47 +1,45 @@
 {
-  "appId": "com.lingumate.app",
-  "appName": "LinguMate",
-  "webDir": "dist",
-  "bundledWebRuntime": false,
-  "server": {
-    "androidScheme": "https",
-    "iosScheme": "capacitor",
-    "cleartext": false
-  },
-  "plugins": {
-    "GoogleSignIn": {
-      "AndroidServerClientId": "925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com"
-    },
-    "SignInWithApple": {},
-    "Browser": {
-      "packageId": "com.lingumate.app"
-    },
-    "Preferences": {},
-    "Device": {},
-    "App": {
-      "launchUrl": "index.html"
-    }
-  },
-  "ios": {
-    "contentInset": "automatic",
-    "scrollEnabled": true,
-    "backgroundColor": "#ffffff",
-    "allowMixedContent": true
-  },
-  "android": {
-    "allowMixedContent": true,
-    "webContentsDebuggingEnabled": true
-  },
-  "packageClassList": [
-    "AppPlugin",
-    "CAPBrowserPlugin",
-    "DevicePlugin",
-    "GoogleSignInPlugin",
-    "PreferencesPlugin",
-    "PurchasesPlugin",
-    "RevenuecatPurchasesCapacitorPlugin",
-    "SharePlugin",
-    "SignInWithApple",
-    "TextToSpeechPlugin"
-  ]
+	"appId": "com.lingumate.app",
+	"appName": "LinguMate",
+	"webDir": "dist",
+	"bundledWebRuntime": false,
+	"server": {
+		"androidScheme": "https",
+		"iosScheme": "capacitor",
+		"cleartext": false
+	},
+	"plugins": {
+		"GoogleSignIn": {
+			"AndroidServerClientId": "925702138089-h0nil85giuhntueemrtp277hafjifksm.apps.googleusercontent.com"
+		},
+		"SignInWithApple": {},
+		"Browser": {
+			"packageId": "com.lingumate.app"
+		},
+		"Preferences": {},
+		"Device": {},
+		"App": {
+			"launchUrl": "index.html"
+		}
+	},
+	"ios": {
+		"contentInset": "automatic",
+		"scrollEnabled": true,
+		"backgroundColor": "#ffffff",
+		"allowMixedContent": true
+	},
+	"android": {
+		"allowMixedContent": true,
+		"webContentsDebuggingEnabled": true
+	},
+	"packageClassList": [
+		"TextToSpeechPlugin",
+		"AppPlugin",
+		"CAPBrowserPlugin",
+		"DevicePlugin",
+		"PreferencesPlugin",
+		"SharePlugin",
+		"PurchasesPlugin",
+		"GoogleSignInPlugin"
+	]
 }

@@ -26,14 +26,9 @@ workflows:
 
       - name: Setup iOS project
         script: |
-          rm -rf ios
-          npx cap add ios
           npx cap sync ios
-          echo "=== Before git restore ==="
-          python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList before:',d.get('packageClassList'))"
-          git checkout HEAD -- ios/App/App/capacitor.config.json && echo "git restore OK" || echo "git restore FAILED"
-          echo "=== After git restore ==="
-          python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList after:',d.get('packageClassList'))"
+          echo "=== Verify ==="
+          python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList:',d.get('packageClassList'))"
           ls -la ios/App/
 
       - name: Increment build number
