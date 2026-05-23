@@ -30,6 +30,8 @@ workflows:
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
+          # 提升 deployment target 到 15.0（CapacitorGoogleSignIn 需要）
+          sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
           # 用 CocoaPods Podfile 覆盖
           mkdir -p ios/App
           cat > ios/App/Podfile <<'PODEOF'
@@ -58,8 +60,7 @@ workflows:
             end
           end
           PODEOF
-          # sync（Podfile 已存在，cap sync 会自动执行 pod install，但我们在下一步手动执行）
-          npx cap sync ios --deployment=false
+          npx cap sync ios
           cd ios/App && pod install --repo-update
           cd ../..
           ls -la ios/App/
