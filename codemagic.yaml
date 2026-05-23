@@ -27,6 +27,7 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
+          rm -rf ~/Library/Developer/Xcode/DerivedData
           npx cap add ios
           npx cap sync ios
           # 删除 SPM 生成的项目，避免与 CocoaPods 的 RevenueCat 冲突
