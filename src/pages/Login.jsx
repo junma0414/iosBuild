@@ -396,7 +396,7 @@ const Login = () => {
         }
       } catch (_) {}
 
-      // Fallback: open in OS browser (Google callback → SPA callback → login)
+      // Fallback: open in system Safari
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
@@ -407,13 +407,11 @@ const Login = () => {
           `redirect_uri=${encodeURIComponent(redirectUri)}&` +
           `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
 
-        window.open(authUrl, '_blank');
-        setLoading(false);
+        window.location.href = authUrl;
       } catch (err) {
         console.error('Google login error:', err);
         setError('Google Sign-In is not available on this device. Please use email to sign in.');
         setLoading(false);
-        return;
       }
     }
 
