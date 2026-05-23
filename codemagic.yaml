@@ -29,9 +29,11 @@ workflows:
           rm -rf ios
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
-          # 先创建 Xcode 项目（SPM 模式）
           npx cap add ios
-          # 立即用 CocoaPods Podfile 覆盖（阻止 SPM 生成）
+          # 删除 SPM 工件，避免与 CocoaPods 冲突
+          rm -rf ios/CapApp-SPM
+          sed -i '' '/CapApp-SPM/d' ios/App/App.xcodeproj/project.pbxproj 2>/dev/null || true
+          # 用 CocoaPods Podfile 覆盖
           mkdir -p ios/App
           cat > ios/App/Podfile <<'PODEOF'
           platform :ios, '15.0'
