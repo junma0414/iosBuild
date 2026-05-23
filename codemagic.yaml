@@ -26,11 +26,7 @@ workflows:
 
       - name: Setup iOS project
         script: |
-          rm -rf ios
-          npx cap add ios
           npx cap sync ios
-          # 手动注册插件
-          jq '.packageClassList = ["AppPlugin","CAPBrowserPlugin","DevicePlugin","PreferencesPlugin","SharePlugin","TextToSpeechPlugin","RevenuecatPurchasesCapacitorPlugin"]' ios/App/App/capacitor.config.json > /tmp/cap_tmp.json && mv /tmp/cap_tmp.json ios/App/App/capacitor.config.json
           ls -la ios/App/
 
       - name: Increment build number
