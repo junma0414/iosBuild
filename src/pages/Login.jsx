@@ -527,46 +527,8 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (iOS): SignInWithApple (ESM import) ==========
+    // ========== iOS: Apple login - unavailable (no native plugin) ==========
     if (isNative && isIOS()) {
-      try {
-        const { SignInWithApple } = await import('@capacitor/app');
-        // Capacitor 7 内置 SignInWithApple，需要 ESM import
-      } catch (_) {}
-
-      try {
-        const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
-        if (SignInWithApple) {
-          const result = await SignInWithApple.authorize({
-            clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
-            redirectUri: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
-            scopes: 'email name',
-          });
-
-          const identityToken = result.response?.identityToken;
-          const fullName = result.response?.fullName
-            ? `${result.response.fullName.givenName || ''} ${result.response.fullName.familyName || ''}`.trim()
-            : null;
-
-          if (identityToken) {
-            const apiUrl = getApiUrl();
-            const res = await fetch(`${apiUrl}/auth/apple`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ identityToken, fullName }),
-            });
-            const data = await res.json();
-            if (res.ok && data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-              checkAuth();
-              navigate('/');
-              return;
-            }
-          }
-        }
-      } catch (_) {}
-
       setError('Apple Sign-In is not available on this device. Please use Google or email to sign in.');
       setLoading(false);
       return;
