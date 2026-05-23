@@ -396,46 +396,17 @@ const Login = () => {
         }
       } catch (_) {}
 
-      // Fallback: ASWebAuthenticationSession (generic-oauth2)
+      // Fallback: open in system Safari
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
 
-        const { GenericOAuth2 } = await import('@capacitor-community/generic-oauth2');
-        const result = await GenericOAuth2.authenticate({
-          appId: clientId,
-          authorizationBaseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-          redirectUrl: 'com.lingumate.omnifamily://login',
-          scope: 'email profile openid',
-          responseType: 'code',
-          accessTokenEndpoint: '',
-          additionalParameters: {
-            access_type: 'offline',
-            prompt: 'select_account',
-            state: 'app',
-          },
-          ios: { siwaUseScope: false },
-        });
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent('https://lang.omnifamily.cloud/auth/google/callback')}&` +
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
 
-        const code = result.authorization_code || result.code;
-        if (!code) throw new Error('No authorization code received');
-
-        const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/auth/google/callback`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Google login failed');
-
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-          checkAuth();
-          navigate('/');
-        }
-        return;
+        window.location.href = authUrl;
       } catch (err) {
         console.error('Google login error:', err);
         setError('Google Sign-In is not available on this device. Please use email to sign in.');
@@ -527,53 +498,8 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== iOS: Apple login (native SignInWithApple via apple-sign-in plugin) ==========
+    // ========== iOS: Apple login - not available ==========
     if (isNative && isIOS()) {
-      try {
-        const { SignInWithApple } = await import('@capacitor-community/apple-sign-in');
-        const result = await SignInWithApple.authorize({
-          clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
-          redirectURI: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
-          scopes: 'email name',
-        });
-
-        const identityToken = result.response?.identityToken;
-        const givenName = result.response?.givenName;
-        const familyName = result.response?.familyName;
-        const email = result.response?.email;
-
-        if (!identityToken) throw new Error('No identity token received from Apple');
-
-        const apiUrl = getApiUrl();
-        const res = await fetch(`${apiUrl}/auth/apple`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            identityToken,
-            fullName: `${givenName || ''} ${familyName || ''}`.trim() || null,
-            email: email || null,
-          }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || 'Apple login failed');
-
-        if (data.accessToken) {
-          localStorage.setItem('accessToken', data.accessToken);
-          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-          checkAuth();
-          navigate('/');
-          return;
-        }
-      } catch (err) {
-        if (err.message?.includes('cancel') || err.code === 'userCancelled') {
-          setLoading(false);
-          return;
-        }
-        console.error('Apple Sign-In error:', err);
-        setError(err.message || 'Apple Sign-In failed. Please use Google or email.');
-        setLoading(false);
-        return;
-      }
       setError('Apple Sign-In is not available on this device. Please use Google or email to sign in.');
       setLoading(false);
       return;

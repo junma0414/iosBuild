@@ -30,9 +30,6 @@ workflows:
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
-          # 提升 deployment target 到 15.0（CapacitorGoogleSignIn 需要）
-          sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
-          # 用 CocoaPods Podfile 覆盖
           mkdir -p ios/App
           cat > ios/App/Podfile <<'PODEOF'
           platform :ios, '15.0'
@@ -46,8 +43,6 @@ workflows:
             pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
             pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
             pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
-            pod 'CapacitorCommunityGenericOAuth2', :path => '../../node_modules/@capacitor-community/generic-oauth2'
-            pod 'CapacitorCommunityAppleSignIn', :path => '../../node_modules/@capacitor-community/apple-sign-in'
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
             pod 'CapacitorGoogleSignIn', :path => '../../node_modules/capacitor-google-sign-in'
           end
@@ -83,7 +78,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
+            --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
