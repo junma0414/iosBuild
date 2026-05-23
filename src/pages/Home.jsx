@@ -538,11 +538,14 @@ const fetchUserStats = async () => {
       : window.location.origin;
     const lang = uiLanguage || 'en';
     const url = `${baseUrl}${path}?lang=${lang}`;
-    if (isNative && window.Capacitor?.Plugins?.Browser) {
-      window.Capacitor.Plugins.Browser.open({ url });
-    } else {
-      window.open(url, '_blank');
-    }
+    (async () => {
+      try {
+        const { Browser } = await import('@capacitor/browser');
+        await Browser.open({ url });
+      } catch (_) {
+        window.open(url, '_blank');
+      }
+    })();
   };
 
   const handleCopyLink = async () => {
