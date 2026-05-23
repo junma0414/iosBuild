@@ -32,15 +32,7 @@ workflows:
           npx cap sync ios
           cd ios/App && pod install
           cd ../..
-          python3 -c "
-import re
-with open('ios/App/App.xcodeproj/project.pbxproj', 'r') as f:
-    c = f.read()
-c = re.sub(r'[A-F0-9]{24} \/\* \[CP\] (Embed Pods Frameworks|Copy Pods Resources|Check Pods Manifest.lock) \*\/,\n', '', c)
-with open('ios/App/App.xcodeproj/project.pbxproj', 'w') as f:
-    f.write(c)
-print('CP phases removed')
-"
+          python3 -c "import re;c=open('ios/App/App.xcodeproj/project.pbxproj').read();c=re.sub(r'[A-F0-9]{24} /\* \[CP\] (Embed Pods Frameworks|Copy Pods Resources|Check Pods Manifest.lock) \*/,','',c);open('ios/App/App.xcodeproj/project.pbxproj','w').write(c);print('CP phases removed')"
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
