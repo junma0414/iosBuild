@@ -1,79 +1,64 @@
 workflows:
-  ios-release-workflow:
-    name: iOS Build for App Store Connect
-    instance_type: mac_mini_m2
-    max_build_duration: 60
+    ios-release-workflow:
+        name: iOS Build for App Store Connect
+        instance_type: mac_mini_m2
+        max_build_duration: 60
 
-    environment:
-      groups:
-        - ios_credentials
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.lingumate.app
-      vars:
-        XCODE_SCHEME: "App"
-      node: latest
-      xcode: latest
+        environment:
+            groups:
+                - ios_credentials
+            node: latest
+            xcode: latest
 
-    scripts:
-      - name: Install npm dependencies
-        script: |
-          rm -f package-lock.json
-          npm install --legacy-peer-deps
+        scripts:
+            - name: Install npm dependencies
+              script: |
+                  npm ci
 
-      - name: Build web assets
-        script: |
-          cp .env.production .env
-          echo "=== Capacitor Versions ==="
-          node -e "console.log('core:', require('@capacitor/core/package.json').version); console.log('browser:', require('@capacitor/browser/package.json').version); console.log('ios:', require('@capacitor/ios/package.json').version)"
-          NODE_ENV=production npm run build
+            - name: Build web assets
+              script: |
+                  npm run build
 
-      - name: Setup iOS project
-        script: |
-          npx cap add ios
-          # Capacitor 7 生成 Podfile，修改平台版本
-          sed -i '' "s/platform :ios, '.*'/platform :ios, '15.0'/" ios/App/Podfile 2>/dev/null || true
-          npx cap sync ios
-          cd ios/App && pod install
-          cd ../..
-          ls -la ios/App/
+            - name: Sync Capacitor iOS project
+              script: |
+                  npx cap sync ios
 
-      - name: Increment build number
-        script: |
-          cd ios/App
-          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "6767740956" 2>/dev/null || echo "0")
-          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
-          echo "Latest TestFlight build number: $LATEST_BUILD_NUMBER"
-          echo "New build number: $NEW_BUILD_NUMBER"
-          agvtool new-version -all $NEW_BUILD_NUMBER
+            - name: Fetch iOS signing files
+              script: |
+                  app-store-connect fetch-signing-files "com.lingumate.app" --type IOS_APP_STORE --create
 
-      - name: Configure code signing
-        script: |
-          keychain add-certificates
-          xcode-project use-profiles
+            - name: Add certificates to keychain
+              script: |
+                  keychain add-certificates
 
-      - name: Build and export IPA
-        script: |
-          cd ios/App
-          echo "=== Build files ==="
-          ls -la *.xcodeproj *.xcworkspace 2>&1 || true
-          xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
-            --scheme "$XCODE_SCHEME"
+            - name: Set up code signing settings
+              script: |
+                  xcode-project use-profiles
 
-    artifacts:
-      - ios/App/build/ios/ipa/*.ipa
+            - name: Increment build number
+              script: |
+                  cd ios/App
+                  agvtool new-version -all $(($(app-store-connect get-latest-testflight-build-number "6767740956")+ 1))
 
-    publishing:
-      app_store_connect:
-        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
-        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
-        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
-        submit_to_testflight: true
+            - name: Build ipa
+              script: |
+                  xcode-project build-ipa \
+                    --workspace "ios/App/App.xcworkspace" \
+                    --scheme "App"
 
-      email:
-        recipients:
-          - junma0614@gmail.com
-        notify:
-          success: true
-          failure: true
+        artifacts:
+            - build/ios/ipa/*.ipa
+            - /tmp/xcodebuild_logs/*.log
+
+        publishing:
+            app_store_connect:
+                api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+                key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+                issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+                submit_to_testflight: true
+            email:
+                recipients:
+                    - junma0614@gmail.com
+                notify:
+                    success: true
+                    failure: true
