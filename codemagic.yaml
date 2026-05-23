@@ -46,6 +46,7 @@ workflows:
             pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
             pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
             pod 'CapacitorCommunityGenericOAuth2', :path => '../../node_modules/@capacitor-community/generic-oauth2'
+            pod 'CapacitorCommunityAppleSignIn', :path => '../../node_modules/@capacitor-community/apple-sign-in'
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
             pod 'CapacitorGoogleSignIn', :path => '../../node_modules/capacitor-google-sign-in'
           end

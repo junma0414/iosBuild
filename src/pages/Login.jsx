@@ -527,8 +527,53 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== iOS: Apple login - unavailable (no native plugin) ==========
+    // ========== iOS: Apple login (native SignInWithApple via apple-sign-in plugin) ==========
     if (isNative && isIOS()) {
+      try {
+        const { SignInWithApple } = await import('@capacitor-community/apple-sign-in');
+        const result = await SignInWithApple.authorize({
+          clientId: import.meta.env.VITE_APPLE_CLIENT_ID,
+          redirectURI: import.meta.env.VITE_APPLE_REDIRECT_URI || window.location.origin + '/auth/apple/callback',
+          scopes: 'email name',
+        });
+
+        const identityToken = result.response?.identityToken;
+        const givenName = result.response?.givenName;
+        const familyName = result.response?.familyName;
+        const email = result.response?.email;
+
+        if (!identityToken) throw new Error('No identity token received from Apple');
+
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/auth/apple`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            identityToken,
+            fullName: `${givenName || ''} ${familyName || ''}`.trim() || null,
+            email: email || null,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Apple login failed');
+
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          checkAuth();
+          navigate('/');
+          return;
+        }
+      } catch (err) {
+        if (err.message?.includes('cancel') || err.code === 'userCancelled') {
+          setLoading(false);
+          return;
+        }
+        console.error('Apple Sign-In error:', err);
+        setError(err.message || 'Apple Sign-In failed. Please use Google or email.');
+        setLoading(false);
+        return;
+      }
       setError('Apple Sign-In is not available on this device. Please use Google or email to sign in.');
       setLoading(false);
       return;
