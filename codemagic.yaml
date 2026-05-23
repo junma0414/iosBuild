@@ -28,21 +28,19 @@ workflows:
         script: |
           rm -rf ios
           npx cap add ios
-          # 修改 deployment target 并添加 post_install 禁用 Pod 签名
           sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
-          cat >> ios/App/Podfile <<'PODEOF'
-
-          post_install do |installer|
-            installer.pods_project.targets.each do |target|
-              target.build_configurations.each do |config|
-                config.build_settings["CODE_SIGNING_ALLOWED"] = "NO"
-              end
-            end
-          end
-          PODEOF
           npx cap sync ios
           cd ios/App && pod install
           cd ../..
+          python3 -c "
+import re
+with open('ios/App/App.xcodeproj/project.pbxproj', 'r') as f:
+    c = f.read()
+c = re.sub(r'[A-F0-9]{24} \/\* \[CP\] (Embed Pods Frameworks|Copy Pods Resources|Check Pods Manifest.lock) \*\/,\n', '', c)
+with open('ios/App/App.xcodeproj/project.pbxproj', 'w') as f:
+    f.write(c)
+print('CP phases removed')
+"
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
@@ -149,7 +147,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
+            --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
