@@ -1,7 +1,6 @@
 // @ts-nocheck
 // src/pages/Home.jsx
 import React, { useState, useEffect, useMemo } from "react";
-import { Browser } from '@capacitor/browser';
 import { Link, useLocation } from "react-router-dom";
 import { useLanguage } from '../lib/LanguageContext';
 import { base44 } from '../api/base44Client';
@@ -539,8 +538,9 @@ const fetchUserStats = async () => {
       : window.location.origin;
     const lang = uiLanguage || 'en';
     const url = `${baseUrl}${path}?lang=${lang}`;
-    if (Browser?.open) {
-      Browser.open({ url });
+    const browser = window.Capacitor?.Plugins?.Browser;
+    if (browser?.open) {
+      browser.open({ url });
     } else {
       window.open(url, '_blank');
     }

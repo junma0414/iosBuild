@@ -13,8 +13,11 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', '@tanstack/react-query'],
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'react/jsx-runtime', '@tanstack/react-query'],
+    include: ['react', 'react-dom', 'react/jsx-runtime', '@tanstack/react-query', '@capacitor/core', '@capacitor/browser', '@capacitor/app'],
     force: true,
+  },
+  ssr: {
+    noExternal: ['@capacitor/core', '@capacitor/browser', '@capacitor/app', '@capacitor/device', '@capacitor/preferences', '@capacitor/share'],
   },
   server: {
     port: 5173,

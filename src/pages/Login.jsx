@@ -6,11 +6,10 @@ import { useLanguage } from '../lib/LanguageContext';
 import { Chrome, Apple, Mail } from 'lucide-react';
 import { isNativeApp, isIOS, isAndroid } from '../lib/planUtils';
 import { base44 } from '../api/base44Client';
-import { Browser } from '@capacitor/browser';
 
-// 检查 Browser 是否可用
-const capBrowser = typeof Browser?.open === 'function' ? Browser : null;
-console.log('Capacitor Browser import:', capBrowser ? 'available' : 'NOT available');
+const capBrowser = () => {
+  try { return window.Capacitor?.Plugins?.Browser; } catch (_) { return null; }
+};
 
 
 const openLegalDoc = (path) => {
@@ -19,8 +18,9 @@ const openLegalDoc = (path) => {
     ? (import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud')
     : window.location.origin;
   const url = `${baseUrl}${path}?lang=en`;
-  if (capBrowser) {
-    capBrowser.open({ url });
+  const browser = capBrowser();
+  if (browser?.open) {
+    browser.open({ url });
   } else {
     window.open(url, '_blank');
   }
@@ -400,7 +400,8 @@ const Login = () => {
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
-        if (!capBrowser) throw new Error('Browser plugin not available');
+        const browser = capBrowser();
+        if (!browser?.open) throw new Error('Browser plugin not available');
 
         const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
         const stateId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
@@ -409,7 +410,7 @@ const Login = () => {
           `redirect_uri=${encodeURIComponent(redirectUri)}&` +
           `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=${stateId}`;
 
-        await capBrowser.open({ url: authUrl });
+        await browser.open({ url: authUrl });
         // 轮询 token（后端 GET callback 存了 pendingAuth）
         setLoading(false);
         const apiUrl = getApiUrl();
