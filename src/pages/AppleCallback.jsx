@@ -36,8 +36,9 @@ const AppleCallback = () => {
           const refreshToken = params.get('refreshToken');
           localStorage.setItem('accessToken', accessToken);
           if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+          try { window.location.href = 'com.lingumate.omnifamily://login?accessToken=' + encodeURIComponent(accessToken); } catch(_) {}
           await checkAuth();
-          navigate('/');
+          navigate('/login');
           return;
         }
 
