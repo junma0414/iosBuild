@@ -29,6 +29,8 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
+          # 清理 CocoaPods 残留（避免 [CP] Embed Pods Frameworks 错误）
+          rm -rf ios/App/Pods ios/App/Podfile ios/App/Podfile.lock
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
