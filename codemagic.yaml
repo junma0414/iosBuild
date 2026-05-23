@@ -22,6 +22,8 @@ workflows:
       - name: Build web assets
         script: |
           cp .env.production .env
+          echo "=== Capacitor Versions ==="
+          node -e "console.log('core:', require('@capacitor/core/package.json').version); console.log('browser:', require('@capacitor/browser/package.json').version); console.log('ios:', require('@capacitor/ios/package.json').version)"
           NODE_ENV=production npm run build
 
       - name: Setup iOS project
