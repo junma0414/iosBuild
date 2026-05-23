@@ -29,6 +29,8 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
+          # 删除 SPM 生成的项目，避免与 CocoaPods 的 RevenueCat 冲突
+          rm -rf ios/CapApp-SPM
           # 用完整 Podfile 覆盖（sync 生成的 + 必要配置）
           cat > ios/App/Podfile <<'PODEOF'
           install! 'cocoapods', :disable_input_output_paths => true
