@@ -396,80 +396,22 @@ const Login = () => {
         }
       } catch (_) {}
 
-      // Fallback: Capacitor Browser + Google redirect OAuth + poll token
+      // Fallback: open in OS browser (Google callback → SPA callback → login)
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
-        const browser = capBrowser();
-        if (!browser?.open) throw new Error('Browser plugin not available');
 
         const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
-        const stateId = 'app_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
           `client_id=${clientId}&` +
           `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=${stateId}`;
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
 
-        await browser.open({ url: authUrl });
-        // 轮询 token（后端 GET callback 存了 pendingAuth）
+        window.open(authUrl, '_blank');
         setLoading(false);
-        const apiUrl = getApiUrl();
-        for (let i = 0; i < 200; i++) {
-          await new Promise(r => setTimeout(r, 1500));
-          try {
-            const res = await fetch(`${apiUrl}/auth/poll-token`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ stateId }),
-            });
-            const data = await res.json();
-            if (data.accessToken) {
-              localStorage.setItem('accessToken', data.accessToken);
-              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-              checkAuth();
-              navigate('/');
-              return;
-            }
-          } catch (_) {}
-        }
-        setError('Login timed out. Please try again.');
-        return;
       } catch (err) {
         console.error('Google login error:', err);
-        // GIS popup fallback
-        try {
-          const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-          if (!window.google?.accounts) {
-            await new Promise((resolve, reject) => {
-              const script = document.createElement('script');
-              script.src = 'https://accounts.google.com/gsi/client';
-              script.async = true; script.defer = true;
-              script.onload = resolve; script.onerror = reject;
-              document.head.appendChild(script);
-            });
-          }
-          const apiUrl = getApiUrl();
-          await new Promise((resolve, reject) => {
-            const client = google.accounts.oauth2.initCodeClient({
-              client_id: clientId, scope: 'email profile openid',
-              ux_mode: 'popup',
-              callback: async (response) => {
-                if (response.error) return reject(new Error(response.error_description || response.error));
-                const res = await fetch(`${apiUrl}/auth/google/callback`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: response.code }) });
-                const data = await res.json();
-                if (data.accessToken) {
-                  localStorage.setItem('accessToken', data.accessToken);
-                  if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-                  checkAuth(); navigate('/'); resolve();
-                } else reject(new Error('No access token'));
-              },
-              error_callback: (err) => reject(new Error(err.message || 'Google login failed')),
-            });
-            client.requestCode();
-          });
-        } catch (gisErr) {
-          setError('Google Sign-In is not available on this device. Please use email to sign in.');
-        }
+        setError('Google Sign-In is not available on this device. Please use email to sign in.');
         setLoading(false);
         return;
       }
