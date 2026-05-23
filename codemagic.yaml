@@ -29,8 +29,11 @@ workflows:
           rm -rf ios
           npx cap add ios
           npx cap sync ios
-          # 从 Git 恢复 capacitor.config.json（包含 packageClassList）
-          git checkout HEAD -- ios/App/App/capacitor.config.json
+          echo "=== Before git restore ==="
+          python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList before:',d.get('packageClassList'))"
+          git checkout HEAD -- ios/App/App/capacitor.config.json && echo "git restore OK" || echo "git restore FAILED"
+          echo "=== After git restore ==="
+          python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList after:',d.get('packageClassList'))"
           ls -la ios/App/
 
       - name: Increment build number
