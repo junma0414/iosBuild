@@ -7,6 +7,22 @@ import { Chrome, Apple, Mail } from 'lucide-react';
 import { isNativeApp, isIOS, isAndroid } from '../lib/planUtils';
 import { base44 } from '../api/base44Client';
 
+let GoogleAuthPlugin = null;
+let BrowserPlugin = null;
+let SignInWithApplePlugin = null;
+
+async function getCapacitorPlugins() {
+  try {
+    const { Browser } = await import('@capacitor/browser');
+    BrowserPlugin = Browser;
+  } catch (_) {}
+  try {
+    const { App } = await import('@capacitor/app');
+    // App plugin use for appUrlOpen
+  } catch (_) {}
+  return { Browser: BrowserPlugin };
+}
+
 
 const openLegalDoc = (path) => {
   const isNative = isNativeApp();
@@ -14,10 +30,34 @@ const openLegalDoc = (path) => {
     ? (import.meta.env.VITE_SITE_URL || 'https://lang.omnifamily.cloud')
     : window.location.origin;
   const url = `${baseUrl}${path}?lang=en`;
-  if (isNative && window.Capacitor?.Plugins?.Browser) {
-    window.Capacitor.Plugins.Browser.open({ url });
-  } else {
-    window.open(url, '_blank');
+  (async () => {
+    try {
+      const { Browser } = await import('@capacitor/browser');
+      await Browser.open({ url });
+    } catch (_) {
+      window.open(url, '_blank');
+    }
+  })();
+};
+
+const pollForToken = async (stateId, provider) => {
+  const apiUrl = getApiUrl();
+  for (let i = 0; i < 200; i++) {
+    await new Promise(r => setTimeout(r, 1500));
+    try {
+      const res = await fetch(`${apiUrl}/auth/poll-token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stateId, provider }),
+      });
+      const data = await res.json();
+      if (data.accessToken) {
+        localStorage.setItem('accessToken', data.accessToken);
+        if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+        window.location.href = '/';
+        return;
+      }
+    } catch (_) {}
   }
 };
 
@@ -346,13 +386,12 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: Google login (try native plugin first, then GIS popup) ==========
+    // ========== iOS: Google login (try native plugin, fallback to GIS popup) ==========
     if (isNative && isIOS()) {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
         const idToken = result.response?.authorizationCode || result.response?.idToken;
-
         if (idToken) {
           const apiUrl = getApiUrl();
           const res = await fetch(`${apiUrl}/auth/google`, {
@@ -361,9 +400,7 @@ const Login = () => {
             body: JSON.stringify({ idToken }),
           });
           const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Google login failed');
-
-          if (data.accessToken) {
+          if (res.ok && data.accessToken) {
             localStorage.setItem('accessToken', data.accessToken);
             if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
             checkAuth();
@@ -371,58 +408,34 @@ const Login = () => {
             return;
           }
         }
-      } catch (err) {
-        console.log('GoogleSignIn plugin not available, trying GIS popup...');
-      }
+      } catch (_) {}
 
-      // Fallback: GIS popup (may be blocked by WKWebView)
+      // Fallback: ESM Browser import + Google redirect OAuth
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
 
-        if (!window.google?.accounts) {
-          await new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = 'https://accounts.google.com/gsi/client';
-            script.async = true;
-            script.defer = true;
-            script.onload = resolve;
-            script.onerror = (e) => reject(new Error('Failed to load GIS SDK'));
-            document.head.appendChild(script);
-          });
-        }
+        const { Browser } = await import('@capacitor/browser');
+        const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+          `client_id=${clientId}&` +
+          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
 
-        const apiUrl = getApiUrl();
-        await new Promise((resolve, reject) => {
-          const client = google.accounts.oauth2.initCodeClient({
-            client_id: clientId,
-            scope: 'email profile openid',
-            ux_mode: 'popup',
-            callback: async (response) => {
-              try {
-                if (response.error) return reject(new Error(response.error_description || response.error));
-                const res = await fetch(`${apiUrl}/auth/google/callback`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ code: response.code }),
-                });
-                const data = await res.json();
-                if (!res.ok) return reject(new Error(data.error || 'Google login failed'));
-                if (data.accessToken) {
-                  localStorage.setItem('accessToken', data.accessToken);
-                  if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-                  checkAuth();
-                  navigate('/');
-                  resolve();
-                } else {
-                  reject(new Error('No access token received from server'));
-                }
-              } catch (err) { reject(err); }
-            },
-            error_callback: (err) => reject(new Error(err.message || 'Google login failed')),
-          });
-          client.requestCode();
+        await Browser.open({ url: authUrl });
+
+        // browserFinished 事件
+        Browser.addListener('browserFinished', () => {
+          setLoading(false);
+          // 轮询 token（后端 GET callback 存了 pendingAuth）
+          const stateId = localStorage.getItem('iosGoogleStateId');
+          if (stateId) {
+            localStorage.removeItem('iosGoogleStateId');
+            pollForToken(stateId, 'google');
+          }
         });
+
+        localStorage.setItem('iosGoogleStateId', authUrl.match(/state=([^&]+)/)?.[1] || '');
         return;
       } catch (err) {
         console.error('Google login error:', err);
@@ -516,8 +529,13 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== Native (iOS): SignInWithApple plugin (if available) ==========
+    // ========== Native (iOS): SignInWithApple (ESM import) ==========
     if (isNative && isIOS()) {
+      try {
+        const { SignInWithApple } = await import('@capacitor/app');
+        // Capacitor 7 内置 SignInWithApple，需要 ESM import
+      } catch (_) {}
+
       try {
         const SignInWithApple = window.Capacitor?.Plugins?.SignInWithApple;
         if (SignInWithApple) {
@@ -532,35 +550,25 @@ const Login = () => {
             ? `${result.response.fullName.givenName || ''} ${result.response.fullName.familyName || ''}`.trim()
             : null;
 
-          if (!identityToken) throw new Error('No identity token received from Apple');
-
-          const apiUrl = getApiUrl();
-          const res = await fetch(`${apiUrl}/auth/apple`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ identityToken, fullName }),
-          });
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error || 'Apple login failed');
-
-          if (data.accessToken) {
-            localStorage.setItem('accessToken', data.accessToken);
-            if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
-            checkAuth();
-            navigate('/');
-          } else {
-            throw new Error('No access token received from server');
+          if (identityToken) {
+            const apiUrl = getApiUrl();
+            const res = await fetch(`${apiUrl}/auth/apple`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ identityToken, fullName }),
+            });
+            const data = await res.json();
+            if (res.ok && data.accessToken) {
+              localStorage.setItem('accessToken', data.accessToken);
+              if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+              checkAuth();
+              navigate('/');
+              return;
+            }
           }
-          return;
         }
-      } catch (err) {
-        if (err.message?.includes('cancel') || err.code === 'userCancelled') {
-          setLoading(false);
-          return;
-        }
-        console.error('Apple Sign-In native error:', err);
-      }
-      // SignInWithApple 不可用: 提示用户用其他方式
+      } catch (_) {}
+
       setError('Apple Sign-In is not available on this device. Please use Google or email to sign in.');
       setLoading(false);
       return;
