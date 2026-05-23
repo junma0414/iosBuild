@@ -26,7 +26,11 @@ workflows:
 
       - name: Setup iOS project
         script: |
+          rm -rf ios
+          npx cap add ios
           npx cap sync ios
+          # 从 Git 恢复 capacitor.config.json（包含 packageClassList）
+          git checkout HEAD -- ios/App/App/capacitor.config.json
           ls -la ios/App/
 
       - name: Increment build number
