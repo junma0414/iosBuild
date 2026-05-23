@@ -27,14 +27,11 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
-          # 清除 Xcode 缓存
           rm -rf ~/Library/Caches/com.apple.dt.Xcode ~/Library/Developer/Xcode/DerivedData/*
-          npx cap add ios
+          npx cap add ios --package-manager=cocoapods
           npx cap sync ios
-          # 删除 SPM 生成的项目，避免与 CocoaPods 的 RevenueCat 冲突
           rm -rf ios/CapApp-SPM
-          # 用完整 Podfile 覆盖（sync 生成的 + 必要配置）
-          cat > ios/App/Podfile <<'PODEOF'
+          cat > ios/App/Podfile <<\"PODEOF\"
           install! 'cocoapods', :disable_input_output_paths => true
           platform :ios, '15.0'
           target 'App' do
@@ -57,8 +54,7 @@ workflows:
               end
             end
           end
-          PODEOF
-          # pod install 前删除 CapApp-SPM，避免 RevenueCat AppIntents 重复
+          \"PODEOF\"
           rm -rf ios/CapApp-SPM
           cd ios/App && pod install --repo-update
           cd ../..
