@@ -27,6 +27,8 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
+          rm -rf ~/Library/Developer/Xcode/DerivedData
+          rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
           mkdir -p ios/App
           cat > ios/App/Podfile <<EOF
