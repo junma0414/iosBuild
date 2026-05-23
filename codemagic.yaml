@@ -21,6 +21,7 @@ workflows:
 
             - name: Sync Capacitor iOS project
               script: |
+                  npx cap add ios
                   npx cap sync ios
 
             - name: Fetch iOS signing files
