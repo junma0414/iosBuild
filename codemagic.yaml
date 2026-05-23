@@ -30,14 +30,20 @@ workflows:
           rm -rf ~/Library/Developer/Xcode/DerivedData
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
-          mkdir -p ios/App
-          cat > ios/App/Podfile <<EOF
-          platform :ios, '14.0'
-          target 'App' do
-          end
-          EOF
           npx cap sync ios
-          cp ../../capacitor.config.json ios/App/App/capacitor.config.json
+          # 修改 deployment target 并禁用 Pod 签名
+          sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile
+          echo "
+          post_install do |installer|
+            installer.pods_project.targets.each do |target|
+              target.build_configurations.each do |config|
+                config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
+              end
+            end
+          end
+          " >> ios/App/Podfile
+          cd ios/App && pod install --repo-update
+          cd ../..
           ls -la ios/App/
 
       - name: Increment build number
@@ -58,7 +64,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --project "App.xcodeproj" \
+            --workspace "App.xcworkspace" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
