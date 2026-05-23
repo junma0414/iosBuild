@@ -28,7 +28,7 @@ workflows:
         script: |
           rm -rf ios
           rm -rf ~/Library/Caches/com.apple.dt.Xcode ~/Library/Developer/Xcode/DerivedData/*
-          npx cap add ios --package-manager=cocoapods
+          npx cap add ios
           npx cap sync ios
           rm -rf ios/CapApp-SPM
           cat > ios/App/Podfile <<\"PODEOF\"
