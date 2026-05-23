@@ -26,10 +26,32 @@ workflows:
 
       - name: Setup iOS project
         script: |
+          rm -rf ios
+          npx cap add ios
           npx cap sync ios
+          # 用完整 Podfile 覆盖（sync 生成的 + 必要配置）
+          cat > ios/App/Podfile <<'PODEOF'
+          install! 'cocoapods', :disable_input_output_paths => true
+          platform :ios, '15.0'
+          target 'App' do
+            use_frameworks! :linkage => :static
+            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
+            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios', :modular_headers => true
+            pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
+            pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
+            pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
+            pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
+            pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
+            pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
+            pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
+            pod 'CapacitorGoogleSignIn', :path => '../../node_modules/capacitor-google-sign-in'
+          end
+          PODEOF
+          cd ios/App && pod install --repo-update
+          cd ../..
           echo "=== Verify ==="
           python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList:',d.get('packageClassList'))"
-          ls -la ios/App/
+          ls -la ios/App/*.xcworkspace
 
       - name: Increment build number
         script: |
@@ -49,7 +71,7 @@ workflows:
         script: |
           cd ios/App
           xcode-project build-ipa \
-            --project "App.xcodeproj" \
+            --workspace "App.xcworkspace" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
