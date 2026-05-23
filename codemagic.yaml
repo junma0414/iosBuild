@@ -26,7 +26,12 @@ workflows:
 
       - name: Setup iOS project
         script: |
+          npx cap add ios
+          # Capacitor 7 生成 Podfile，修改平台版本
+          sed -i '' "s/platform :ios, '.*'/platform :ios, '15.0'/" ios/App/Podfile 2>/dev/null || true
           npx cap sync ios
+          cd ios/App && pod install
+          cd ../..
           ls -la ios/App/
 
       - name: Increment build number
@@ -49,7 +54,7 @@ workflows:
           echo "=== Build files ==="
           ls -la *.xcodeproj *.xcworkspace 2>&1 || true
           xcode-project build-ipa \
-            --project "App.xcodeproj" \
+            --workspace "App.xcworkspace" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:

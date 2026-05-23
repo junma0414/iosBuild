@@ -1,0 +1,154 @@
+workflows:
+  ios-release-workflow:
+    name: iOS Build for App Store Connect
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    environment:
+      groups:
+        - ios_credentials
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.lingumate.app
+      vars:
+        XCODE_SCHEME: "App"
+      node: latest
+      xcode: latest
+
+    scripts:
+      - name: Install npm dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: |
+          cp .env.production .env
+          NODE_ENV=production npm run build
+
+      - name: Setup iOS project
+        script: |
+          rm -rf ios
+          npx cap add ios
+          mkdir -p ios/App
+          npx cap sync ios
+          cd ios/App && pod install && ls -la
+          ls -la ios/App/
+
+          # 创建正确的 Main.storyboard
+          mkdir -p ios/App/App/Base.lproj
+          cat > ios/App/App/Base.lproj/Main.storyboard <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="BYZ-38-t0r">
+              <dependencies>
+                  <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
+              </dependencies>
+              <scenes>
+                  <scene sceneID="tne-QT-ifu">
+                      <objects>
+                          <viewController id="BYZ-38-t0r" customClass="CAPBridgeViewController" customModule="Capacitor" sceneMemberID="viewController"/>
+                          <placeholder placeholderIdentifier="IBFirstResponder" id="dkx-z0-nzr" sceneMemberID="firstResponder"/>
+                      </objects>
+                  </scene>
+              </scenes>
+          </document>
+          EOF
+          
+          # 创建正确的 LaunchScreen.storyboard
+          cat > ios/App/App/Base.lproj/LaunchScreen.storyboard <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <document type="com.apple.InterfaceBuilder3.CocoaTouch.Storyboard.XIB" version="3.0" toolsVersion="14111" targetRuntime="iOS.CocoaTouch" propertyAccessControl="none" useAutolayout="YES" launchScreen="YES" useTraitCollections="YES" colorMatched="YES" initialViewController="01J-lp-oVM">
+              <dependencies>
+                  <plugIn identifier="com.apple.InterfaceBuilder.IBCocoaTouchPlugin" version="14088"/>
+              </dependencies>
+              <scenes>
+                  <scene sceneID="EHf-IW-A2E">
+                      <objects>
+                          <viewController id="01J-lp-oVM" sceneMemberID="viewController">
+                              <view key="view" contentMode="scaleToFill" id="Ze5-6b-2t3">
+                                  <rect key="frame" x="0.0" y="0.0" width="600" height="600"/>
+                                  <autoresizingMask key="autoresizingMask" widthSizable="YES" heightSizable="YES"/>
+                                  <subviews>
+                                      <label opaque="NO" userInteractionEnabled="NO" contentMode="left" horizontalHuggingPriority="251" verticalHuggingPriority="251" text="Loading..." textAlignment="center" lineBreakMode="tailTruncation" baselineAdjustment="alignBaselines" adjustsFontSizeToFit="NO" translatesAutoresizingMaskIntoConstraints="NO" id="lwH-C2-qbZ">
+                                          <rect key="frame" x="264" y="289" width="72" height="21"/>
+                                          <fontDescription key="fontDescription" type="system" pointSize="17"/>
+                                          <nil key="textColor"/>
+                                          <nil key="highlightedColor"/>
+                                      </label>
+                                  </subviews>
+                                  <color key="backgroundColor" white="1" alpha="1" colorSpace="custom" customColorSpace="genericGamma22GrayColorSpace"/>
+                                  <constraints>
+                                      <constraint firstItem="lwH-C2-qbZ" firstAttribute="centerX" secondItem="Ze5-6b-2t3" secondAttribute="centerX" id="X0l-lz-1Nv"/>
+                                      <constraint firstItem="lwH-C2-qbZ" firstAttribute="centerY" secondItem="Ze5-6b-2t3" secondAttribute="centerY" id="vO0-Hf-9qJ"/>
+                                  </constraints>
+                              </view>
+                          </viewController>
+                          <placeholder placeholderIdentifier="IBFirstResponder" id="iYj-Kq-Ea1" userLabel="First Responder" sceneMemberID="firstResponder"/>
+                      </objects>
+                      <point key="canvasLocation" x="53" y="375"/>
+                  </scene>
+              </scenes>
+          </document>
+          EOF
+          
+          /usr/libexec/PlistBuddy -c "Set :UILaunchStoryboardName LaunchScreen" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :UIMainStoryboardFile Main" ios/App/App/Info.plist
+          
+          cat > ios/App/App/AppDelegate.swift <<'EOF'
+          import UIKit
+          import Capacitor
+
+          @UIApplicationMain
+          class AppDelegate: UIResponder, UIApplicationDelegate {
+
+              var window: UIWindow?
+
+              func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+                  return true
+              }
+
+              func application(_ app: UIApplication, open url: URL, options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
+                  return ApplicationDelegateProxy.shared.application(app, open: url, options: options)
+              }
+
+              func application(_ application: UIApplication, continue userActivity: NSUserActivity, restorationHandler: @escaping ([UIUserActivityRestoring]?) -> Void) -> Bool {
+                  return ApplicationDelegateProxy.shared.application(application, continue: userActivity, restorationHandler: restorationHandler)
+              }
+          }
+          EOF
+
+      - name: Increment build number
+        script: |
+          cd ios/App
+          LATEST_BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "6767740956" 2>/dev/null || echo "0")
+          NEW_BUILD_NUMBER=$((LATEST_BUILD_NUMBER + 1))
+          echo "Latest TestFlight build number: $LATEST_BUILD_NUMBER"
+          echo "New build number: $NEW_BUILD_NUMBER"
+          agvtool new-version -all $NEW_BUILD_NUMBER
+
+      - name: Configure code signing
+        script: |
+          keychain add-certificates
+          xcode-project use-profiles
+
+      - name: Build and export IPA
+        script: |
+          cd ios/App
+          xcode-project build-ipa \
+            --project "App.xcodeproj" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - ios/App/build/ios/ipa/*.ipa
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+
+      email:
+        recipients:
+          - junma0614@gmail.com
+        notify:
+          success: true
+          failure: true
