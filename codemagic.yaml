@@ -27,7 +27,6 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
-          rm -rf ~/Library/Developer/Xcode/DerivedData
           npx cap add ios
           mkdir -p ios/App
           cat > ios/App/Podfile <<EOF
@@ -36,7 +35,10 @@ workflows:
           end
           EOF
           npx cap sync ios
+          # 复制根目录 capacitor.config.json（包含 packageClassList）覆盖 iOS 项目
+          cp ../../capacitor.config.json ios/App/App/capacitor.config.json
           ls -la ios/App/
+          ls -la ios/App/App/capacitor.config.json
 
           # 创建正确的 Main.storyboard
           mkdir -p ios/App/App/Base.lproj
