@@ -48,6 +48,9 @@ workflows:
           end
           PODEOF
           cd ios/App && pod install --repo-update
+          rm -rf CapApp-SPM
+          # 从 workspace 中移除 CapApp-SPM 引用
+          sed -i '' '/CapApp-SPM/d' App.xcworkspace/contents.xcworkspacedata 2>/dev/null || true
           cd ../..
           echo "=== Verify ==="
           python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList:',d.get('packageClassList'))"
