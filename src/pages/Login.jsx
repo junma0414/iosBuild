@@ -396,18 +396,46 @@ const Login = () => {
         }
       } catch (_) {}
 
-      // Fallback: open in system Safari
+      // Fallback: ASWebAuthenticationSession (generic-oauth2)
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
 
-        const redirectUri = 'https://lang.omnifamily.cloud/auth/google/callback';
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent(redirectUri)}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
+        const { GenericOAuth2 } = await import('@capacitor-community/generic-oauth2');
+        const result = await GenericOAuth2.authenticate({
+          appId: clientId,
+          authorizationBaseUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+          redirectUrl: 'com.lingumate.omnifamily://login',
+          scope: 'email profile openid',
+          responseType: 'code',
+          accessTokenEndpoint: '',
+          additionalParameters: {
+            access_type: 'offline',
+            prompt: 'select_account',
+            state: 'app',
+          },
+          ios: { siwaUseScope: false },
+        });
 
-        window.location.href = authUrl;
+        const code = result.authorization_code || result.code;
+        if (!code) throw new Error('No authorization code received');
+
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/auth/google/callback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Google login failed');
+
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          checkAuth();
+          navigate('/');
+        }
+        return;
       } catch (err) {
         console.error('Google login error:', err);
         setError('Google Sign-In is not available on this device. Please use email to sign in.');
