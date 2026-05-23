@@ -22,6 +22,8 @@ workflows:
             - name: Sync Capacitor iOS project
               script: |
                   npx cap add ios
+                  # Capacitor 7 生成的 Podfile 需要修改 deployment target
+                  sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
                   npx cap sync ios
 
             - name: Fetch iOS signing files
