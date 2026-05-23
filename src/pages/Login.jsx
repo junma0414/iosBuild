@@ -346,8 +346,36 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: Google Identity Services (GIS) popup ==========
+    // ========== iOS: Google login (try native plugin first, then GIS popup) ==========
     if (isNative && isIOS()) {
+      try {
+        const { GoogleSignIn } = await import('capacitor-google-sign-in');
+        const result = await GoogleSignIn.handleSignInButton();
+        const idToken = result.response?.authorizationCode || result.response?.idToken;
+
+        if (idToken) {
+          const apiUrl = getApiUrl();
+          const res = await fetch(`${apiUrl}/auth/google`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ idToken }),
+          });
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error || 'Google login failed');
+
+          if (data.accessToken) {
+            localStorage.setItem('accessToken', data.accessToken);
+            if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+            checkAuth();
+            navigate('/');
+            return;
+          }
+        }
+      } catch (err) {
+        console.log('GoogleSignIn plugin not available, trying GIS popup...');
+      }
+
+      // Fallback: GIS popup (may be blocked by WKWebView)
       try {
         const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         if (!clientId) throw new Error('Google Client ID not configured');
@@ -359,7 +387,7 @@ const Login = () => {
             script.async = true;
             script.defer = true;
             script.onload = resolve;
-            script.onerror = reject;
+            script.onerror = (e) => reject(new Error('Failed to load GIS SDK'));
             document.head.appendChild(script);
           });
         }
@@ -389,9 +417,7 @@ const Login = () => {
                 } else {
                   reject(new Error('No access token received from server'));
                 }
-              } catch (err) {
-                reject(err);
-              }
+              } catch (err) { reject(err); }
             },
             error_callback: (err) => reject(new Error(err.message || 'Google login failed')),
           });
@@ -400,7 +426,7 @@ const Login = () => {
         return;
       } catch (err) {
         console.error('Google login error:', err);
-        setError(err.message || 'Google login failed');
+        setError('Google Sign-In is not available on this device. Please use email to sign in.');
         setLoading(false);
         return;
       }
