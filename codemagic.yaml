@@ -27,40 +27,9 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
-          rm -rf ~/Library/Caches/com.apple.dt.Xcode ~/Library/Developer/Xcode/DerivedData/*
           npx cap add ios
           npx cap sync ios
-          rm -rf ios/CapApp-SPM
-          cat > ios/App/Podfile <<\"PODEOF\"
-          install! 'cocoapods', :disable_input_output_paths => true
-          platform :ios, '15.0'
-          target 'App' do
-            use_frameworks! :linkage => :static
-            pod 'Capacitor', :path => '../../node_modules/@capacitor/ios'
-            pod 'CapacitorCordova', :path => '../../node_modules/@capacitor/ios', :modular_headers => true
-            pod 'CapacitorApp', :path => '../../node_modules/@capacitor/app'
-            pod 'CapacitorBrowser', :path => '../../node_modules/@capacitor/browser'
-            pod 'CapacitorDevice', :path => '../../node_modules/@capacitor/device'
-            pod 'CapacitorPreferences', :path => '../../node_modules/@capacitor/preferences'
-            pod 'CapacitorShare', :path => '../../node_modules/@capacitor/share'
-            pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
-            pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
-            pod 'CapacitorGoogleSignIn', :path => '../../node_modules/capacitor-google-sign-in'
-          end
-          post_install do |installer|
-            installer.pods_project.targets.each do |target|
-              target.build_configurations.each do |config|
-                config.build_settings['ENABLE_APP_INTENTS_METADATA_GENERATION'] = 'NO'
-              end
-            end
-          end
-          \"PODEOF\"
-          rm -rf ios/CapApp-SPM
-          cd ios/App && pod install --repo-update
-          cd ../..
-          echo "=== Verify ==="
-          python3 -c "import json;d=json.load(open('ios/App/App/capacitor.config.json'));print('packageClassList:',d.get('packageClassList'))"
-          ls -la ios/App/*.xcworkspace
+          ls -la ios/App/
 
       - name: Increment build number
         script: |
@@ -79,8 +48,10 @@ workflows:
       - name: Build and export IPA
         script: |
           cd ios/App
+          echo "=== Build files ==="
+          ls -la *.xcodeproj *.xcworkspace 2>&1 || true
           xcode-project build-ipa \
-            --workspace "App.xcworkspace" \
+            --project "App.xcodeproj" \
             --scheme "$XCODE_SCHEME"
 
     artifacts:
