@@ -33,6 +33,8 @@ const GoogleCallback = () => {
           localStorage.setItem('accessToken', accessToken);
           if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
           checkAuth();
+          // 尝试用 custom scheme 跳回 APP
+          try { window.location.href = 'com.lingumate.omnifamily://login?accessToken=' + encodeURIComponent(accessToken); } catch(_) {}
           navigate('/');
           return;
         }
@@ -63,6 +65,8 @@ const GoogleCallback = () => {
         }
 
         checkAuth();
+        // 尝试用 custom scheme 跳回 APP
+        try { window.location.href = 'com.lingumate.omnifamily://login?accessToken=' + encodeURIComponent(data.accessToken); } catch(_) {}
         navigate('/');
       } catch (err) {
         console.error('[GoogleCallback] error:', err);
