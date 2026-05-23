@@ -1,6 +1,7 @@
 // @ts-nocheck
 // src/pages/Home.jsx
 import React, { useState, useEffect, useMemo } from "react";
+import { Browser } from '@capacitor/browser';
 import { Link, useLocation } from "react-router-dom";
 import { useLanguage } from '../lib/LanguageContext';
 import { base44 } from '../api/base44Client';
@@ -538,14 +539,11 @@ const fetchUserStats = async () => {
       : window.location.origin;
     const lang = uiLanguage || 'en';
     const url = `${baseUrl}${path}?lang=${lang}`;
-    (async () => {
-      try {
-        const { Browser } = await import('@capacitor/browser');
-        await Browser.open({ url });
-      } catch (_) {
-        window.open(url, '_blank');
-      }
-    })();
+    if (Browser?.open) {
+      Browser.open({ url });
+    } else {
+      window.open(url, '_blank');
+    }
   };
 
   const handleCopyLink = async () => {
