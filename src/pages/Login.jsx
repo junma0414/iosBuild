@@ -900,7 +900,7 @@ const Login = () => {
             </button>
           )}
 
-          {!isRegister && (
+          {!isRegister && !isAndroid() && (
             <button
               type="button"
               onClick={handleAppleLogin}
