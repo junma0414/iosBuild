@@ -27,12 +27,15 @@ workflows:
       - name: Setup iOS project
         script: |
           rm -rf ios
+          rm -rf ~/Library/Developer/Xcode/DerivedData
           npx cap add ios
-          sed -i '' 's/platform :ios, '"'"'[0-9.]*'"'"'/platform :ios, '"'"'15.0'"'"'/' ios/App/Podfile 2>/dev/null || true
+          mkdir -p ios/App
+          cat > ios/App/Podfile <<EOF
+          platform :ios, '14.0'
+          target 'App' do
+          end
+          EOF
           npx cap sync ios
-          cd ios/App && pod install
-          cd ../..
-          python3 -c "import re;c=open('ios/App/App.xcodeproj/project.pbxproj').read();c=re.sub(r'[A-F0-9]{24} /\* \[CP\] (Embed Pods Frameworks|Copy Pods Resources|Check Pods Manifest.lock) \*/,','',c);open('ios/App/App.xcodeproj/project.pbxproj','w').write(c);print('CP phases removed')"
           ls -la ios/App/
 
           # 创建正确的 Main.storyboard
