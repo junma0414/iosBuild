@@ -44,8 +44,7 @@ workflows:
           # 先执行 cap sync 让 Capacitor 注册所有 plugins 到 Xcode 项目
           npx cap sync ios
           # 设置 App target 的 deployment target 为 15.0（cap add 默认是 14.0，但 Capacitor 7 要求 15.0）
-          /usr/libexec/PlistBuddy -c "Set:Project:Target:App:BuildSettings:IPHONEOS_DEPLOYMENT_TARGET 15.0" ios/App/App.xcodeproj/project.pbxproj 2>/dev/null || \
-          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 14.0;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/App/App.xcodeproj/project.pbxproj
+          sed -i '' 's/IPHONEOS_DEPLOYMENT_TARGET = 14[.0]*;/IPHONEOS_DEPLOYMENT_TARGET = 15.0;/g' ios/App/App.xcodeproj/project.pbxproj
           # 再用自定义 Podfile 覆盖（设定 deployment target 15.0 避免 pod 冲突）
           cat > ios/App/Podfile <<'PODEOF'
           platform :ios, '15.0'
