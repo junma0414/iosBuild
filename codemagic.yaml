@@ -31,6 +31,16 @@ workflows:
           rm -rf ~/Library/Caches/com.apple.dt.Xcode
           npx cap add ios
           mkdir -p ios/App
+          cp GoogleService-Info.plist ios/App/App/GoogleService-Info.plist
+          # 注册 Google OAuth callback URL scheme (REVERSED_CLIENT_ID)
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes array" ios/App/App/Info.plist 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:0 dict" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:0:CFBundleURLSchemes array" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:0:CFBundleURLSchemes:0 string com.googleusercontent.apps.925702138089-qk3rm2dg8ig4ghase8ukiqv7avfto175" ios/App/App/Info.plist
+          # 注册 Apple Sign-In callback URL scheme
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1 dict" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1:CFBundleURLSchemes array" ios/App/App/Info.plist
+          /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1:CFBundleURLSchemes:0 string com.lingumate.omnifamily" ios/App/App/Info.plist
           cat > ios/App/Podfile <<'PODEOF'
           platform :ios, '15.0'
           target 'App' do
