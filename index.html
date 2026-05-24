@@ -9,7 +9,7 @@
   <body>
     <div id="root"></div>
     
-    <!-- 🔴 添加 Capacitor 手动注入脚本 -->
+    <!-- Capacitor 手动注入脚本 -->
     <script>
       if (window.location.protocol === 'capacitor:') {
         window.Capacitor = {
@@ -19,9 +19,48 @@
             if (/iPhone|iPad/.test(navigator.userAgent)) return 'ios';
             return 'web';
           },
-          platform: /Android/.test(navigator.userAgent) ? 'android' : 'ios'
+          platform: /Android/.test(navigator.userAgent) ? 'android' : 'ios',
+          Plugins: {
+            App: {
+              addListener: function(event, callback) {
+                console.log('[Capacitor Mock] App.addListener:', event);
+                // 电池优化可忽略
+                if (event === 'appUrlOpen') {
+                  var checkUrl = function() {
+                    try {
+                      var url = new URL(window.location.href);
+                      var code = url.searchParams.get('code');
+                      var accessToken = url.searchParams.get('accessToken');
+                      if (code || accessToken) {
+                        callback({ url: window.location.href });
+                      }
+                    } catch(e) {}
+                  };
+                  checkUrl();
+                  window.addEventListener('hashchange', checkUrl);
+                }
+                return { remove: function() {} };
+              },
+              removeAllListeners: function() { return Promise.resolve(); }
+            },
+            Browser: {
+              open: function(options) {
+                console.log('[Capacitor Mock] Browser.open:', options.url);
+                window.open(options.url, '_system');
+                return Promise.resolve();
+              },
+              addListener: function() { return Promise.resolve({ remove: function() {} }); },
+              removeAllListeners: function() { return Promise.resolve(); }
+            },
+            SignInWithApple: {
+              authorize: function() {
+                console.log('[Capacitor Mock] SignInWithApple.authorize');
+                return Promise.reject(new Error('NOT_AVAILABLE'));
+              }
+            }
+          }
         };
-        console.log('✅ Capacitor 已手动注入', window.Capacitor);
+        console.log('Capacitor manual injected with Plugins mock', window.Capacitor);
       }
     </script>
     
