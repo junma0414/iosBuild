@@ -41,7 +41,9 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1 dict" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1:CFBundleURLSchemes array" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1:CFBundleURLSchemes:0 string com.lingumate.omnifamily" ios/App/App/Info.plist
-          cat > ios/App/Podfile <<'PODEOF'
+          # 先执行 cap sync 让 Capacitor 注册所有 plugins 到 Xcode 项目
+          npx cap sync ios
+          # 再用自定义 Podfile 覆盖（设定 deployment target 15.0 避免 pod 冲突）
           platform :ios, '15.0'
           target 'App' do
             use_frameworks! :linkage => :static
@@ -61,6 +63,7 @@ workflows:
               target.build_configurations.each do |config|
                 config.build_settings['CODE_SIGNING_ALLOWED'] = 'NO'
                 config.build_settings['ENABLE_APP_INTENTS_METADATA_GENERATION'] = 'NO'
+                config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
               end
             end
           end
