@@ -41,6 +41,8 @@ workflows:
           /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1 dict" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1:CFBundleURLSchemes array" ios/App/App/Info.plist
           /usr/libexec/PlistBuddy -c "Add CFBundleURLTypes:1:CFBundleURLSchemes:0 string com.lingumate.omnifamily" ios/App/App/Info.plist
+          # 启用 In-App Purchase entitlement
+          /usr/libexec/PlistBuddy -c "Add :com.apple.developer.in-app-payments array" ios/App/App/Info.plist 2>/dev/null || true
           # 先执行 cap sync 让 Capacitor 注册所有 plugins 到 Xcode 项目
           npx cap sync ios
           # 设置 App target 的 deployment target 为 15.0（cap add 默认是 14.0，但 Capacitor 7 要求 15.0）

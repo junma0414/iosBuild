@@ -39,6 +39,7 @@
     "DevicePlugin",
     "PreferencesPlugin",
     "SharePlugin",
-    "SignInWithApple"
+    "SignInWithApple",
+    "RevenuecatPurchasesCapacitor"
   ]
 }
