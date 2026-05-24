@@ -89,20 +89,21 @@ const Login = () => {
     const handleOpenUrl = async (event) => {
       const url = event?.url || '';
 
-      // Handle com.lingumate.app://login redirect (from backend OAuth callbacks)
-      const urlObj = (() => {
-        try { return new URL(url); } catch (_) { return null; }
-      })();
-      const params = urlObj ? urlObj.searchParams : new URLSearchParams(url.split('?')[1] || '');
-
-      const accessToken = params.get('accessToken');
-      if (accessToken) {
-        const refreshToken = params.get('refreshToken');
-        localStorage.setItem('accessToken', accessToken);
-        if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
-        checkAuth();
-        navigate('/');
-        return;
+      // Handle com.lingumate.omnifamily://login or com.lingumate.app://login redirect
+      if (url.startsWith('com.lingumate.omnifamily://login') || url.startsWith('com.lingumate.app://login')) {
+        const urlObj = (() => {
+          try { return new URL(url.replace('com.lingumate.omnifamily://', 'https://').replace('com.lingumate.app://', 'https://')); } catch (_) { return null; }
+        })();
+        const params = urlObj ? urlObj.searchParams : new URLSearchParams(url.split('?')[1] || '');
+        const accessToken = params.get('accessToken');
+        if (accessToken) {
+          const refreshToken = params.get('refreshToken');
+          localStorage.setItem('accessToken', accessToken);
+          if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
+          checkAuth();
+          navigate('/');
+          return;
+        }
       }
 
       // Apple OAuth callback (native: custom scheme with query params)
@@ -332,7 +333,7 @@ const Login = () => {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
-        const idToken = result.response?.authorizationCode || result.response?.idToken;
+        const idToken = result.response?.idToken || result.response?.authorizationCode;
 
         if (!idToken) {
           throw new Error('No identity token received from Google');
@@ -377,7 +378,7 @@ const Login = () => {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
-        const idToken = result.response?.authorizationCode || result.response?.idToken;
+        const idToken = result.response?.idToken || result.response?.authorizationCode;
         if (idToken) {
           const apiUrl = getApiUrl();
           const res = await fetch(`${apiUrl}/auth/google`, {
@@ -396,22 +397,33 @@ const Login = () => {
         }
       } catch (_) {}
 
-      // Fallback: open in system Safari
-      try {
-        const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-        if (!clientId) throw new Error('Google Client ID not configured');
-
-        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-          `client_id=${clientId}&` +
-          `redirect_uri=${encodeURIComponent('https://lang.omnifamily.cloud/auth/google/callback')}&` +
-          `response_type=code&scope=email profile openid&access_type=offline&prompt=select_account&state=app`;
-
-        window.location.href = authUrl;
-      } catch (err) {
-        console.error('Google login error:', err);
-        setError('Google Sign-In is not available on this device. Please use email to sign in.');
+      // Fallback: use mobile-init endpoint to get auth URL, then open in system browser
+      const apiUrl = getApiUrl();
+      const initResponse = await fetch(`${apiUrl}/auth/google/mobile-init?platform=ios`, {
+        method: 'GET', headers: { 'Content-Type': 'application/json' },
+      });
+      const initData = await initResponse.json();
+      if (!initData.authUrl) {
+        setError('Failed to get Google OAuth URL');
         setLoading(false);
+        return;
       }
+
+      const browser = window.Capacitor?.Plugins?.Browser;
+      if (browser?.open) {
+        await browser.open({ url: initData.authUrl });
+      } else {
+        const link = document.createElement('a');
+        link.href = initData.authUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      setLoading(false);
+      return;
     }
 
     // ========== Web: Google Identity Services (GIS) popup ==========
@@ -498,10 +510,61 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== iOS: Apple login - not available ==========
+    // ========== iOS: Apple login via native plugin ==========
     if (isNative && isIOS()) {
-      setError('Apple Sign-In is not available on this device. Please use Google or email to sign in.');
-      setLoading(false);
+      try {
+        const signInPlugin = window.Capacitor?.Plugins?.SignInWithApple;
+        if (!signInPlugin) {
+          throw new Error('SignInWithApple plugin not available');
+        }
+        const result = await signInPlugin.authorize();
+        const identityToken = result?.response?.identityToken;
+        if (!identityToken) {
+          throw new Error('No identity token received from Apple');
+        }
+        const fullName = result?.response?.fullName;
+        const fullNameStr = fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim() : null;
+
+        const apiUrl = getApiUrl();
+        const res = await fetch(`${apiUrl}/auth/apple`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identityToken, fullName: fullNameStr || undefined }),
+        });
+        const data = await res.json();
+        if (data.accessToken) {
+          localStorage.setItem('accessToken', data.accessToken);
+          if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
+          checkAuth();
+          navigate('/');
+        } else {
+          throw new Error(data.error || 'Apple login failed');
+        }
+      } catch (err) {
+        if (err.message?.includes('CANCELLED') || err.message?.includes('cancel')) {
+          setLoading(false);
+          return;
+        }
+        console.error('Apple Sign-In native error:', err);
+        // Fallback to web OAuth
+        try {
+          const apiUrl = getApiUrl();
+          const response = await fetch(`${apiUrl}/auth/apple/init?platform=ios`, {
+            method: 'GET', headers: { 'Content-Type': 'application/json' },
+          });
+          const data = await response.json();
+          if (!data.authUrl) throw new Error('Failed to get Apple OAuth URL');
+          const browser = window.Capacitor?.Plugins?.Browser;
+          if (browser?.open) {
+            await browser.open({ url: data.authUrl });
+          } else {
+            window.location.href = data.authUrl;
+          }
+        } catch (fallbackErr) {
+          setError(fallbackErr.message || 'Apple login failed');
+          setLoading(false);
+        }
+      }
       return;
     }
 

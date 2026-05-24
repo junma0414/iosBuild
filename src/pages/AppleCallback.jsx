@@ -38,7 +38,7 @@ const AppleCallback = () => {
           if (refreshToken) localStorage.setItem('refreshToken', refreshToken);
           try { window.location.href = 'com.lingumate.omnifamily://login?accessToken=' + encodeURIComponent(accessToken); } catch(_) {}
           await checkAuth();
-          navigate('/login');
+          navigate('/');
           return;
         }
 
@@ -72,7 +72,7 @@ const AppleCallback = () => {
             localStorage.setItem('accessToken', data.accessToken);
             if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
             await checkAuth();
-            navigate('/login');
+            navigate('/');
             return;
           } else {
             throw new Error(data.error || 'Apple login failed');
@@ -91,7 +91,7 @@ const AppleCallback = () => {
             localStorage.setItem('accessToken', data.accessToken);
             if (data.refreshToken) localStorage.setItem('refreshToken', data.refreshToken);
             await checkAuth();
-            navigate('/login');
+            navigate('/');
             return;
           } else {
             throw new Error(data.error || 'Apple login failed');
