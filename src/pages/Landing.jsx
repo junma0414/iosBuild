@@ -84,7 +84,7 @@ export default function Landing() {
           
           <Link to="/login">
             <Button className="rounded-full px-6">
-              Get Started
+              Log In
               <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </Link>

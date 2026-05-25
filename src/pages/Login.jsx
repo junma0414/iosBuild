@@ -373,18 +373,18 @@ const Login = () => {
       }
     }
 
-    // ========== iOS: Google login (try native plugin, fallback to GIS popup) ==========
+    // ========== iOS: Google login (try native plugin, fallback to Browser OAuth) ==========
     if (isNative && isIOS()) {
       try {
         const { GoogleSignIn } = await import('capacitor-google-sign-in');
         const result = await GoogleSignIn.handleSignInButton();
-        const idToken = result.response?.idToken || result.response?.authorizationCode;
-        if (idToken) {
+        const identityToken = result.response?.identityToken || result.response?.authorizationCode;
+        if (identityToken) {
           const apiUrl = getApiUrl();
           const res = await fetch(`${apiUrl}/auth/google`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ idToken }),
+            body: JSON.stringify({ idToken: identityToken }),
           });
           const data = await res.json();
           if (res.ok && data.accessToken) {
@@ -395,7 +395,9 @@ const Login = () => {
             return;
           }
         }
-      } catch (_) {}
+      } catch (err) {
+        console.error('Google Sign-In native plugin error, falling back to Browser OAuth:', err);
+      }
 
       // Fallback: use mobile-init endpoint to get auth URL, then open in system browser
       const apiUrl = getApiUrl();
@@ -510,20 +512,22 @@ const Login = () => {
 
     const isNative = isNativeApp();
 
-    // ========== iOS: Apple login via native plugin ==========
+    // ========== iOS: Apple login via @capacitor-community/apple-sign-in ==========
     if (isNative && isIOS()) {
       try {
-        const signInPlugin = window.Capacitor?.Plugins?.SignInWithApple;
-        if (!signInPlugin) {
-          throw new Error('SignInWithApple plugin not available');
-        }
-        const result = await signInPlugin.authorize();
+        const { SignInWithApple } = await import('@capacitor-community/apple-sign-in');
+        const result = await SignInWithApple.authorize({
+          clientId: import.meta.env.VITE_APPLE_CLIENT_ID || 'com.lingumate.omnifamily',
+          redirectURI: 'com.lingumate.omnifamily://auth/apple/callback',
+          scopes: 'email name',
+        });
         const identityToken = result?.response?.identityToken;
         if (!identityToken) {
           throw new Error('No identity token received from Apple');
         }
-        const fullName = result?.response?.fullName;
-        const fullNameStr = fullName ? `${fullName.givenName || ''} ${fullName.familyName || ''}`.trim() : null;
+        const givenName = result?.response?.givenName || '';
+        const familyName = result?.response?.familyName || '';
+        const fullNameStr = `${givenName} ${familyName}`.trim() || null;
 
         const apiUrl = getApiUrl();
         const res = await fetch(`${apiUrl}/auth/apple`, {
@@ -546,7 +550,7 @@ const Login = () => {
           return;
         }
         console.error('Apple Sign-In native error:', err);
-        // Fallback to web OAuth
+        // Fallback to web OAuth via Browser plugin
         try {
           const apiUrl = getApiUrl();
           const response = await fetch(`${apiUrl}/auth/apple/init?platform=ios`, {
@@ -562,9 +566,9 @@ const Login = () => {
           }
         } catch (fallbackErr) {
           setError(fallbackErr.message || 'Apple login failed');
-          setLoading(false);
         }
       }
+      setLoading(false);
       return;
     }
 

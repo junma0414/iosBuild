@@ -60,6 +60,7 @@ workflows:
             pod 'CapacitorCommunityTextToSpeech', :path => '../../node_modules/@capacitor-community/text-to-speech'
             pod 'RevenuecatPurchasesCapacitor', :path => '../../node_modules/@revenuecat/purchases-capacitor'
             pod 'CapacitorGoogleSignIn', :path => '../../node_modules/capacitor-google-sign-in'
+            pod 'CapacitorCommunityAppleSignIn', :path => '../../node_modules/@capacitor-community/apple-sign-in'
           end
           post_install do |installer|
             installer.pods_project.targets.each do |target|
